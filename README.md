@@ -116,7 +116,7 @@ Visit `http://localhost:3000/submissions` to start building.
 ## Submission Instructions
 
 - Provide a short README update summarizing approach, tradeoffs, and how to run the solution.
-- Include screenshots or Loom if you want to showcase UX details (optional).
+- Record and share a brief screen capture (max 2 minutes) demonstrating the frontend working end-to-end with the backend.
 - Call out any stretch goals implemented.
 - Automated tests are optional, but including targeted backend or frontend tests is a strong signal.
 
