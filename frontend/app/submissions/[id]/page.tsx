@@ -9,6 +9,7 @@ import {
   Link as MuiLink,
   Stack,
   Typography,
+  Chip,
 } from '@mui/material';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -19,38 +20,125 @@ export default function SubmissionDetailPage() {
   const params = useParams<{ id: string }>();
   const submissionId = params?.id ?? '';
 
-  const detailQuery = useSubmissionDetail(submissionId);
+  const { data, isLoading, isError } = useSubmissionDetail(submissionId);
+
+  if (isLoading) {
+    return <Container sx={{ py: 6 }}>Loading...</Container>;
+  }
+
+  if (isError || !data) {
+    return <Container sx={{ py: 6 }}>Failed to load submission</Container>;
+  }
 
   return (
     <Container maxWidth="md" sx={{ py: 6 }}>
-      <Stack spacing={3}>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
-          <div>
-            <Typography variant="h4">Submission detail</Typography>
-            <Typography color="text.secondary">
-              Use this page to present the full submission payload along with contacts, documents,
-              and notes.
-            </Typography>
-          </div>
-          <MuiLink component={Link} href="/submissions" underline="none">
-            Back to list
-          </MuiLink>
+      <Stack spacing={4}>
+        {/* Header */}
+        <Box display="flex" justifyContent="space-between">
+          <Box>
+            <Typography variant="h4">{data.company.legalName}</Typography>
+            <Typography color="text.secondary">{data.summary}</Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1}>
+            <Chip label={data.status.toUpperCase()} color="primary" />
+            <Chip label={data.priority.toUpperCase()} variant="outlined" />
+          </Stack>
         </Box>
 
+        <MuiLink component={Link} href="/submissions" underline="none">
+          ← Back to list
+        </MuiLink>
+
+        {/* Key Info */}
         <Card variant="outlined">
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              API data placeholder
-            </Typography>
-            <Typography color="text.secondary">
-              The React Query call is disabled until you turn it on. Once you enable it and wire up
-              serializers on the backend you can render key facts, contacts, documents, and note
-              timelines.
-            </Typography>
+            <Typography variant="h6">Key Information</Typography>
             <Divider sx={{ my: 2 }} />
-            <pre style={{ margin: 0, fontSize: 14 }}>
-              {JSON.stringify({ submissionId, queryKey: detailQuery.queryKey }, null, 2)}
-            </pre>
+
+            <Stack spacing={1}>
+              <Typography>
+                <strong>Broker:</strong> {data.broker.name}
+              </Typography>
+              <Typography>
+                <strong>Owner:</strong> {data.owner.fullName}
+              </Typography>
+              <Typography>
+                <strong>Industry:</strong> {data.company.industry}
+              </Typography>
+              <Typography>
+                <strong>City:</strong> {data.company.headquartersCity}
+              </Typography>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* Contacts */}
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">Contacts</Typography>
+            <Divider sx={{ my: 2 }} />
+
+            {data.contacts.length === 0 ? (
+              <Typography color="text.secondary">No contacts available</Typography>
+            ) : (
+              <Stack spacing={2}>
+                {data.contacts.map((contact) => (
+                  <Box key={contact.id}>
+                    <Typography fontWeight={600}>{contact.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {contact.role}
+                    </Typography>
+                    <Typography variant="body2">{contact.email}</Typography>
+                    <Typography variant="body2">{contact.phone}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Documents */}
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">Documents</Typography>
+            <Divider sx={{ my: 2 }} />
+
+            {data.documents.length === 0 ? (
+              <Typography color="text.secondary">No documents available</Typography>
+            ) : (
+              <Stack spacing={1}>
+                {data.documents.map((doc) => (
+                  <MuiLink key={doc.id} href={doc.fileUrl} target="_blank">
+                    {doc.title} ({doc.docType})
+                  </MuiLink>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Notes */}
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6">Notes</Typography>
+            <Divider sx={{ my: 2 }} />
+
+            {data.notes.length === 0 ? (
+              <Typography color="text.secondary">No notes available</Typography>
+            ) : (
+              <Stack spacing={2}>
+                {data.notes.map((note) => (
+                  <Box key={note.id}>
+                    <Typography fontWeight={600}>{note.authorName}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(note.createdAt).toLocaleString()}
+                    </Typography>
+                    <Typography>{note.body}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            )}
           </CardContent>
         </Card>
       </Stack>

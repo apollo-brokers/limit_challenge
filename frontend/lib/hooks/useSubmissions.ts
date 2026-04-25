@@ -17,8 +17,9 @@ async function fetchSubmissions(filters: SubmissionListFilters) {
   const response = await apiClient.get<PaginatedResponse<SubmissionListItem>>('/submissions/', {
     params: {
       status: filters.status,
-      brokerId: filters.brokerId,
-      companySearch: filters.companySearch,
+      broker_id: filters.brokerId,
+      company_search: filters.companySearch,
+      page: filters.page,
     },
   });
   return response.data;
@@ -37,7 +38,7 @@ export function useSubmissionsList(filters: SubmissionListFilters) {
   return useQuery({
     queryKey: [SUBMISSIONS_QUERY_KEY, filters] as QueryKey,
     queryFn: () => fetchSubmissions(filters),
-    enabled: false,
+    // enabled: false,
   });
 }
 
@@ -45,7 +46,7 @@ export function useSubmissionDetail(id: string | number) {
   return useQuery({
     queryKey: [SUBMISSIONS_QUERY_KEY, id],
     queryFn: () => fetchSubmissionDetail(id),
-    enabled: false,
+    // enabled: false,
     staleTime: 60_000,
   });
 }
