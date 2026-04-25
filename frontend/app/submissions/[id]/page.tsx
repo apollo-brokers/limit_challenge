@@ -58,10 +58,12 @@ export default function SubmissionDetailPage() {
 
             <Stack spacing={1}>
               <Typography>
-                <strong>Broker:</strong> {data.broker.name}
+                <strong>Broker:</strong> {data.broker.name}{' '}
+                {data.broker.primaryContactEmail && `(${data.broker.primaryContactEmail})`}
               </Typography>
               <Typography>
                 <strong>Owner:</strong> {data.owner.fullName}
+                {data.owner.email && `(${data.owner.email})`}
               </Typography>
               <Typography>
                 <strong>Industry:</strong> {data.company.industry}
@@ -109,9 +111,14 @@ export default function SubmissionDetailPage() {
             ) : (
               <Stack spacing={1}>
                 {data.documents.map((doc) => (
-                  <MuiLink key={doc.id} href={doc.fileUrl} target="_blank">
-                    {doc.title} ({doc.docType})
-                  </MuiLink>
+                  <Box key={doc.id}>
+                    <MuiLink href={doc.fileUrl} target="_blank">
+                      {doc.title} ({doc.docType})
+                    </MuiLink>
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(doc.uploadedAt).toLocaleDateString()}
+                    </Typography>
+                  </Box>
                 ))}
               </Stack>
             )}
@@ -132,7 +139,7 @@ export default function SubmissionDetailPage() {
                   <Box key={note.id}>
                     <Typography fontWeight={600}>{note.authorName}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {new Date(note.createdAt).toLocaleString()}
+                      {new Date(note.createdAt).toLocaleDateString()}
                     </Typography>
                     <Typography>{note.body}</Typography>
                   </Box>

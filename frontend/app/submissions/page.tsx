@@ -11,6 +11,7 @@ import {
   TextField,
   Typography,
   Button,
+  Chip,
 } from '@mui/material';
 import Link from 'next/link';
 import { useMemo } from 'react';
@@ -28,6 +29,39 @@ const STATUS_OPTIONS: { label: string; value: SubmissionStatus | '' }[] = [
   { label: 'Closed', value: 'closed' },
   { label: 'Lost', value: 'lost' },
 ];
+
+const getStatusColor = (status: SubmissionStatus) => {
+  switch (status) {
+    case 'new':
+      return 'info';
+    case 'in_review':
+      return 'warning';
+    case 'closed':
+      return 'success';
+    case 'lost':
+      return 'error';
+    default:
+      return 'default';
+  }
+};
+
+const getStatusLabel = (status: SubmissionStatus) => {
+  const option = STATUS_OPTIONS.find((opt) => opt.value === status);
+  return option?.label;
+};
+
+const getPriorityColor = (priority: string) => {
+  switch (priority) {
+    case 'high':
+      return 'error';
+    case 'medium':
+      return 'warning';
+    case 'low':
+      return 'success';
+    default:
+      return 'default';
+  }
+};
 
 export default function SubmissionsPage() {
   const router = useRouter();
@@ -71,18 +105,24 @@ export default function SubmissionsPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 6 }}>
-      <Stack spacing={4}>
+      <Stack spacing={2}>
         {/* Header */}
         <Box>
           <Typography variant="h4" component="h1">
             Submissions
           </Typography>
           <Typography color="text.secondary">
-            Filters update the query parameters and drive backend filtering.
+            Use the filters below to search and organize submissions by status, broker, or company.
           </Typography>
         </Box>
 
         {/* Filters */}
+        <Box display="flex" justifyContent="flex-end">
+          <Button variant="outlined" size="small" onClick={() => router.push('/submissions')}>
+            Clear filters
+          </Button>
+        </Box>
+
         <Card variant="outlined">
           <CardContent>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -161,16 +201,41 @@ export default function SubmissionsPage() {
 
               {/* List */}
               {!submissionsQuery.isLoading &&
-                submissionQueryData?.results?.map((item) => (
-                  <Card key={item.id} variant="outlined">
+                submissionQueryData?.results?.map((item, index) => (
+                  <Card
+                    key={item.id}
+                    variant="outlined"
+                    sx={{
+                      backgroundColor: index % 2 === 0 ? 'rgba(33, 150, 243, 0.05)' : 'transparent',
+                    }}
+                  >
                     <CardContent>
                       <Stack spacing={1}>
-                        <Box display="flex" justifyContent="space-between">
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
                           <Typography variant="h6">{item.company.legalName}</Typography>
 
-                          <Typography color="primary">
-                            {item.status.toUpperCase()} • {item.priority.toUpperCase()}
-                          </Typography>
+                          <Stack direction="row" spacing={2} alignItems="center">
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Typography variant="body2" color="text.secondary">
+                                Status:
+                              </Typography>
+                              <Chip
+                                label={getStatusLabel(item.status)}
+                                color={getStatusColor(item.status)}
+                                size="small"
+                              />
+                            </Box>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Typography variant="body2" color="text.secondary">
+                                Priority:
+                              </Typography>
+                              <Chip
+                                label={item.priority.toUpperCase()}
+                                color={getPriorityColor(item.priority)}
+                                size="small"
+                              />
+                            </Box>
+                          </Stack>
                         </Box>
 
                         <Typography color="text.secondary">
