@@ -12,65 +12,37 @@ import {
   Typography,
   Button,
   Chip,
+  useTheme,
+  Autocomplete,
 } from '@mui/material';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useBrokerOptions } from '@/lib/hooks/useBrokerOptions';
 import { useSubmissionsList } from '@/lib/hooks/useSubmissions';
 import { SubmissionStatus } from '@/lib/types';
+import {
+  STATUS_OPTIONS,
+  getStatusColor,
+  getStatusLabel,
+  getPriorityColor,
+} from '@/lib/utils/submission-utils';
 import { SubmissionsPagination } from '@/app/components/SubmissionsPagination';
-
-const STATUS_OPTIONS: { label: string; value: SubmissionStatus | '' }[] = [
-  { label: 'All statuses', value: '' },
-  { label: 'New', value: 'new' },
-  { label: 'In Review', value: 'in_review' },
-  { label: 'Closed', value: 'closed' },
-  { label: 'Lost', value: 'lost' },
-];
-
-const getStatusColor = (status: SubmissionStatus) => {
-  switch (status) {
-    case 'new':
-      return 'info';
-    case 'in_review':
-      return 'warning';
-    case 'closed':
-      return 'success';
-    case 'lost':
-      return 'error';
-    default:
-      return 'default';
-  }
-};
-
-const getStatusLabel = (status: SubmissionStatus) => {
-  const option = STATUS_OPTIONS.find((opt) => opt.value === status);
-  return option?.label;
-};
-
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case 'high':
-      return 'error';
-    case 'medium':
-      return 'warning';
-    case 'low':
-      return 'success';
-    default:
-      return 'default';
-  }
-};
+import { SubmissionCardSkeleton } from '@/app/components/SubmissionCardSkeleton';
+import { ApiErrorState } from '@/app/components/ApiErrorState';
 
 export default function SubmissionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const theme = useTheme();
 
   const status = searchParams.get('status') || '';
   const brokerId = searchParams.get('brokerId') || '';
   const companyQuery = searchParams.get('companySearch') || '';
   const page = searchParams.get('page') || '1';
+
+  const [companySearchInput, setCompanySearchInput] = useState(companyQuery);
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -98,10 +70,33 @@ export default function SubmissionsPage() {
     [status, brokerId, companyQuery, page],
   );
 
+  // Debounce company search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (companySearchInput !== companyQuery) {
+        updateFilter('companySearch', companySearchInput);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companySearchInput]);
+
+  // Update local input when URL changes (e.g., from back button)
+  useEffect(() => {
+    setCompanySearchInput(companyQuery);
+  }, [companyQuery]);
+
   const submissionsQuery = useSubmissionsList(filters);
   const brokerQuery = useBrokerOptions();
 
   const submissionQueryData = submissionsQuery.data;
+  const brokerQueryData = brokerQuery.data;
+
+  const selectedBroker = useMemo(
+    () => brokerQueryData?.results?.find((broker) => String(broker.id) === brokerId) ?? null,
+    [brokerQueryData?.results, brokerId],
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 6 }}>
@@ -140,25 +135,36 @@ export default function SubmissionsPage() {
                 ))}
               </TextField>
 
-              <TextField
-                select
-                label="Broker"
-                value={brokerId}
-                onChange={(e) => updateFilter('brokerId', e.target.value)}
+              <Autocomplete
+                options={brokerQueryData?.results ?? []}
+                getOptionLabel={(option) => (typeof option === 'string' ? '' : option.name)}
+                value={selectedBroker}
+                onChange={(event, newValue) => {
+                  updateFilter('brokerId', newValue ? String(newValue.id) : '');
+                }}
+                loading={brokerQuery.isLoading}
+                disabled={brokerQuery.isLoading || brokerQuery.isError}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Broker"
+                    error={brokerQuery.isError}
+                    helperText={
+                      brokerQuery.isError
+                        ? 'Failed to load brokers. Try again.'
+                        : brokerQuery.isLoading
+                          ? 'Loading brokers...'
+                          : ''
+                    }
+                  />
+                )}
                 fullWidth
-              >
-                <MenuItem value="">All brokers</MenuItem>
-                {brokerQuery.data?.results?.map((broker) => (
-                  <MenuItem key={broker.id} value={String(broker.id)}>
-                    {broker.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+              />
 
               <TextField
                 label="Company search"
-                value={companyQuery}
-                onChange={(e) => updateFilter('companySearch', e.target.value)}
+                value={companySearchInput}
+                onChange={(e) => setCompanySearchInput(e.target.value)}
                 fullWidth
               />
             </Stack>
@@ -187,12 +193,12 @@ export default function SubmissionsPage() {
               <Divider />
 
               {/* Loading */}
-              {submissionsQuery.isLoading && <Typography>Loading submissions...</Typography>}
+              {(submissionsQuery.isLoading || submissionsQuery.isFetching) && (
+                <SubmissionCardSkeleton />
+              )}
 
               {/* Error */}
-              {submissionsQuery.error && (
-                <Typography color="error">Failed to load submissions</Typography>
-              )}
+              {submissionsQuery.error && <ApiErrorState entityName="submissions" />}
 
               {/* Empty */}
               {!submissionsQuery.isLoading && (submissionQueryData?.results?.length ?? 0) === 0 && (
@@ -206,7 +212,10 @@ export default function SubmissionsPage() {
                     key={item.id}
                     variant="outlined"
                     sx={{
-                      backgroundColor: index % 2 === 0 ? 'rgba(33, 150, 243, 0.05)' : 'transparent',
+                      backgroundColor:
+                        index % 2 === 0
+                          ? theme?.submissionColorMappings?.alternatingRowBackground
+                          : 'transparent',
                     }}
                   >
                     <CardContent>
@@ -221,7 +230,10 @@ export default function SubmissionsPage() {
                               </Typography>
                               <Chip
                                 label={getStatusLabel(item.status)}
-                                color={getStatusColor(item.status)}
+                                color={getStatusColor(
+                                  item.status,
+                                  theme.submissionColorMappings.status,
+                                )}
                                 size="small"
                               />
                             </Box>
@@ -231,7 +243,10 @@ export default function SubmissionsPage() {
                               </Typography>
                               <Chip
                                 label={item.priority.toUpperCase()}
-                                color={getPriorityColor(item.priority)}
+                                color={getPriorityColor(
+                                  item.priority,
+                                  theme.submissionColorMappings.priority,
+                                )}
                                 size="small"
                               />
                             </Box>

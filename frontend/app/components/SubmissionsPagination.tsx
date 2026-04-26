@@ -21,7 +21,7 @@ export function SubmissionsPagination({
   onPageClick,
 }: SubmissionsPaginationProps) {
   const currentPage = Number(page);
-  const itemsPerPage = 5; // Backend default page size
+  const itemsPerPage = 10; // Backend default page size
   const totalPages = Math.ceil((totalCount ?? 0) / itemsPerPage);
   const [goToPageInput, setGoToPageInput] = useState('');
 

@@ -3,6 +3,8 @@
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { PropsWithChildren, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@/lib/theme-types';
+import { SUBMISSION_COLOR_MAPPINGS } from '@/lib/theme-types';
 
 function useTheme() {
   return useMemo(
@@ -17,6 +19,8 @@ function useTheme() {
           },
         },
         shape: { borderRadius: 8 },
+        submissionColorMappings: SUBMISSION_COLOR_MAPPINGS,
+        heroGradient: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
       }),
     [],
   );
