@@ -82,6 +82,10 @@ export interface PaginatedResponse<T> {
 
 export interface SubmissionListFilters {
   status?: SubmissionStatus;
+  priority?: SubmissionPriority;
   brokerId?: string;
   companySearch?: string;
+  hasDocuments?: boolean;
+  hasNotes?: boolean;
+  page?: number;
 }

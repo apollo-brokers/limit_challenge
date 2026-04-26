@@ -83,6 +83,8 @@ polish.
 
 ### Backend
 
+Use Python 3.10+ for the backend environment. Django 5.2.12 will not install on Python 3.9.
+
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
@@ -104,6 +106,38 @@ npm run dev
 ```
 
 Visit `http://localhost:3000/submissions` to start building.
+
+## Solution Notes
+
+### Approach
+
+- I added the missing backend filters for broker, company search, priority, documents, and notes.
+- On the list endpoint I kept pagination in place and added the counts and latest note preview
+  needed by the UI.
+- On the frontend I wired the filters to URL params so the page state survives refresh and can be
+  shared.
+- The list page covers loading, empty, and error states, and the detail page shows contacts,
+  documents, and notes in separate sections.
+
+### Tradeoffs
+
+- The frontend assumes a page size of 10 because that matches the DRF default in this project.
+- I used a small delay on the company search input instead of adding an Apply button.
+- I left `/api/brokers/` unpaginated because it is only used for a small dropdown list here.
+
+### Stretch Goals Implemented
+
+- Added optional priority, document, and note filters.
+- Added a few backend API tests around filtering and list response data.
+- Cleaned up the frontend styling so it feels more complete than the starter scaffold.
+
+### Verification
+
+- Frontend: run `npm install`, then `npm run lint` and `npm run build` from `frontend/`.
+- Backend: use Python 3.10+ to create a virtual environment, install `requirements.txt`, then run
+  `python3 manage.py test submissions` from `backend/`.
+- Seed sample data with `python3 manage.py seed_submissions --force` before recording the screen
+  capture so the list and detail views show the full dataset.
 
 ## Development Workflow
 
