@@ -1,4 +1,4 @@
-from django.db.models import Count, OuterRef, Subquery
+from django.db.models import Count, OuterRef, Prefetch, Subquery
 from rest_framework import viewsets
 
 from submissions import models, serializers
@@ -6,11 +6,11 @@ from submissions.filters.submission import SubmissionFilterSet
 
 
 class SubmissionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = models.Submission.objects.all()
+    queryset = models.Submission.objects.select_related("company", "broker", "owner")
     filterset_class = SubmissionFilterSet
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().order_by("-created_at")
 
         if self.action == "list":
             latest_note = models.Note.objects.filter(submission_id=OuterRef("pk")).order_by("-created_at")
@@ -20,6 +20,12 @@ class SubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                 latest_note_author=Subquery(latest_note.values("author_name")[:1]),
                 latest_note_body=Subquery(latest_note.values("body")[:1]),
                 latest_note_created_at=Subquery(latest_note.values("created_at")[:1]),
+            )
+        elif self.action == "retrieve":
+            queryset = queryset.prefetch_related(
+                "contacts",
+                "documents",
+                Prefetch("notes", queryset=models.Note.objects.order_by("-created_at")),
             )
 
         return queryset
@@ -33,4 +39,4 @@ class SubmissionViewSet(viewsets.ReadOnlyModelViewSet):
 class BrokerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = models.Broker.objects.all()
     serializer_class = serializers.BrokerSerializer
-
+    pagination_class = None
