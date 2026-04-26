@@ -28,7 +28,7 @@ export function ApiErrorState({ entityName = 'data', onClose }: ApiErrorStatePro
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
     >
       <Alert onClose={handleClose} severity="error" sx={{ width: '100%' }}>
-        Failed to load {entityName}. Please refresh the page.
+        Failed to load {entityName}. Please refresh the page or try again later.
       </Alert>
     </Snackbar>
   );
