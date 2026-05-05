@@ -113,6 +113,67 @@ Visit `http://localhost:3000/submissions` to start building.
    data.
 4. When ready, add README notes summarizing your approach, tradeoffs, and any stretch goals.
 
+## Implementation Notes
+
+### Approach
+
+- Extended the submissions API to support operational filtering needs:
+  - `status`
+  - `brokerId`
+  - `companySearch`
+  - optional: `createdFrom`, `createdTo`, `hasDocuments`, `hasNotes`
+- Improved queryset loading for API performance and cleaner payload assembly:
+  - `select_related` on `broker`, `company`, `owner`
+  - `prefetch_related` for detail records (`contacts`, `documents`, `notes`)
+  - list annotations for `documentCount`, `noteCount`, and latest note preview
+- Built a UX-focused frontend workflow on `/submissions` and `/submissions/[id]`:
+  - URL-synced filters mapped directly to API query params
+  - responsive list rendering (table on desktop, cards on mobile)
+  - polished loading/empty/error states
+  - detail sections for summary, contacts, documents, and notes
+- Added backend filter tests in `backend/submissions/tests.py` for key filter behavior.
+
+### Tradeoffs
+
+- Prioritized clarity and maintainability over feature breadth (simple pagination controls, no advanced sorting UI).
+- Kept filtering in `django-filter` for explicit API semantics and easier extension.
+- Added both camelCase and snake_case filter aliases to reduce frontend/backend coupling at the API boundary.
+- Did not add debounced text search or client-side caching beyond React Query defaults to keep behavior predictable and code straightforward.
+
+### How To Run
+
+#### Backend
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_submissions --force
+python manage.py runserver 0.0.0.0:8000
+```
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+# NEXT_PUBLIC_API_BASE_URL defaults to http://localhost:8000/api
+npm run dev
+```
+
+Open [http://localhost:3000/submissions](http://localhost:3000/submissions).
+
+#### Run backend tests
+
+```bash
+cd backend
+source .venv/bin/activate
+python manage.py test submissions.tests
+```
+
 ## Submission Instructions
 
 - Provide a short README update summarizing approach, tradeoffs, and how to run the solution.
