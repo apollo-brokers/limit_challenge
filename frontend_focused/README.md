@@ -132,3 +132,79 @@ Visit `http://localhost:3000/submissions` to start building.
 ## Optional Bonus
 
 Authentication, deployment, or extra tooling are not required but welcome if scope allows.
+
+---
+
+## Solution Summary
+
+### Approach
+
+**Backend** — `SubmissionFilterSet` (`backend/submissions/filters/submission.py`) was extended beyond
+the starter `status` filter to support `brokerId` (exact match on FK id), `companySearch` (case
+insensitive match across company legal name, industry, and headquarters city via `Q` objects), and the
+optional extras `createdFrom`/`createdTo` (date range on `created_at`, with `createdTo` treated as
+inclusive of the whole day when only a date is supplied) and `hasDocuments`/`hasNotes` (boolean filters
+against the annotated `document_count`/`note_count` used for the list view). `SubmissionViewSet.get_queryset`
+adds `select_related` for `broker`/`company`/`owner` on both list and detail actions and
+`prefetch_related` for `contacts`/`documents`/`notes` on detail, to avoid N+1 queries. The `BrokerViewSet`
+disables pagination so the frontend dropdown can consume a flat array.
+
+**Frontend** — All three React Query hooks (`useSubmissionsList`, `useSubmissionDetail`,
+`useBrokerOptions`) were enabled and wired to real endpoints. The `/submissions` list page keeps filter
+state in React state, debounces the company search input (400ms), and syncs every filter plus the current
+page to the URL query string via `useSearchParams`/`router.replace`, so views are shareable/bookmarkable
+and survive a refresh. Results render in an MUI table with status/priority chips, document/note counts,
+a latest-note preview, and page-based pagination driven by the API's `count`/page-size. A collapsible
+"More filters" section exposes the optional `createdFrom`/`createdTo` date range and `hasDocuments`/
+`hasNotes` tri-state selects. Loading, error (with retry), and empty states are handled by a shared
+`QueryFeedback` component reused on both the list and detail pages. The `/submissions/[id]` detail page
+renders the summary, a contacts table, a documents list (linking to `fileUrl`), and a notes timeline.
+
+### Tradeoffs & Assumptions
+
+- **Company search** matches legal name, industry, *and* city in one field rather than three separate
+  inputs, favoring a simpler UX over precision; a real product might offer per-field search or a
+  typeahead.
+- **Date filters** use native HTML `<input type="date">` fields instead of pulling in
+  `@mui/x-date-pickers` as a new dependency, keeping the bundle smaller at a small cost to visual
+  polish.
+- **Pagination** is page-number based (matching DRF's default `PageNumberPagination`) rather than
+  cursor-based, which is simpler but can shift results slightly if records are created between page
+  loads.
+- **Broker pagination was disabled** entirely rather than teaching the frontend to page through broker
+  results, since the dataset is small and a dropdown needs the full list anyway.
+- **No authentication** was added (per the optional bonus section) since the challenge scope is a
+  single internal workspace view.
+
+### Stretch Goals Implemented
+
+- Optional filters `createdFrom`, `createdTo`, `hasDocuments`, `hasNotes` (backend + frontend UI).
+- Filter state fully synced to the URL (not just wired to the query function).
+- Debounced company search to avoid firing a request per keystroke.
+- Query-level optimizations (`select_related`/`prefetch_related`) to avoid N+1s on list/detail.
+- Targeted backend tests (`backend/submissions/tests.py`) covering every filter, the detail payload
+  shape, 404 handling, and the unpaginated brokers endpoint.
+- Shared, reusable UI primitives (`StatusChip`, `PriorityChip`, `QueryFeedback`) instead of one-off
+  markup per page.
+
+### How to Run
+
+See [Getting Started](#getting-started) above. In short:
+
+```bash
+# Backend
+cd backend
+python -m venv .venv && .venv\Scripts\activate  # or source .venv/bin/activate on macOS/Linux
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_submissions --force
+python manage.py test submissions   # optional: run the test suite
+python manage.py runserver 0.0.0.0:8000
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev   # if Turbopack crashes on your machine, use: npx next dev --webpack
+```
+
+Then visit `http://localhost:3000/submissions`.
