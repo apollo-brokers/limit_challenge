@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -74,11 +77,21 @@ class MaintenanceRecord(models.Model):
         on_delete=models.PROTECT,
     )
     performed_on = models.DateField()
-    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
     notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ("-performed_on", "-pk")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cost__gte=0),
+                name="maint_cost_non_negative",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=("vehicle", "-performed_on", "-id"),

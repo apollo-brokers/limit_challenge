@@ -136,8 +136,6 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
-    'DEFAULT_FILTER_BACKENDS': [
-    ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
@@ -159,10 +157,6 @@ SPECTACULAR_SETTINGS = {
             },
         },
     },
-}
-
-JSON_UNDERSCOREIZE = {
-    'no_underscore_before_number': True,
 }
 
 CORS_ALLOW_ALL_ORIGINS = True

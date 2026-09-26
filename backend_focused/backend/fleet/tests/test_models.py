@@ -43,13 +43,14 @@ class FleetModelTests(TestCase):
         mechanic=None,
         maintenance_type=None,
         performed_on=date(2026, 1, 1),
+        cost=Decimal("125.50"),
     ):
         return MaintenanceRecord.objects.create(
             vehicle=vehicle,
             mechanic=mechanic or self.mechanic,
             type=maintenance_type or self.maintenance_type,
             performed_on=performed_on,
-            cost=Decimal("125.50"),
+            cost=cost,
             notes="Routine service",
         )
 
@@ -176,6 +177,25 @@ class FleetModelTests(TestCase):
         vehicle.delete()
 
         self.assertFalse(MaintenanceRecord.objects.filter(pk=record.pk).exists())
+
+    def test_negative_maintenance_cost_is_rejected_by_the_database(self):
+        vehicle = self.create_vehicle(
+            vin="1FTBR1C80NKA00014",
+            license_plate="AB-9003",
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.create_maintenance_record(vehicle=vehicle, cost=Decimal("-0.01"))
+
+    def test_zero_maintenance_cost_is_allowed(self):
+        vehicle = self.create_vehicle(
+            vin="1FTBR1C80NKA00015",
+            license_plate="AB-9004",
+        )
+
+        record = self.create_maintenance_record(vehicle=vehicle, cost=Decimal("0.00"))
+
+        self.assertEqual(record.cost, Decimal("0.00"))
 
     def test_models_have_concise_domain_string_representations(self):
         vehicle = self.create_vehicle(

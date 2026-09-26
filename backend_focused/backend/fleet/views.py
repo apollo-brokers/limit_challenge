@@ -68,7 +68,13 @@ class OfficeViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(parameters=[VehicleSearchParamsSerializer]),
+    list=extend_schema(
+        parameters=[VehicleSearchParamsSerializer],
+        responses={
+            200: VehicleSerializer(many=True),
+            400: OpenApiResponse(description="Invalid search parameters."),
+        },
+    ),
 )
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.select_related("office").order_by("id")
@@ -122,7 +128,13 @@ class VehicleViewSet(viewsets.ModelViewSet):
         serializer = VehicleMaintenanceRecordSerializer(page, many=True)
         return self.get_paginated_response(serializer.data)
 
-    @extend_schema(request=VehicleOfficeAssignmentSerializer, responses=VehicleSerializer)
+    @extend_schema(
+        request=VehicleOfficeAssignmentSerializer,
+        responses={
+            200: VehicleSerializer,
+            400: OpenApiResponse(description="Missing or unknown office_id."),
+        },
+    )
     @action(detail=True, methods=["put"], url_path="office")
     def assign_office(self, request, pk=None):
         """Move the vehicle to another office.
@@ -153,14 +165,19 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         parameters=[VehicleDuplicateCheckParamsSerializer],
-        responses=inline_serializer(
-            name="VehicleConflicts",
-            fields={
-                "conflicts": serializers.ListField(
-                    child=serializers.ChoiceField(choices=("vin", "license_plate")),
-                ),
-            },
-        ),
+        responses={
+            200: inline_serializer(
+                name="VehicleConflicts",
+                fields={
+                    "conflicts": serializers.ListField(
+                        child=serializers.ChoiceField(choices=("vin", "license_plate")),
+                    ),
+                },
+            ),
+            400: OpenApiResponse(
+                description="Missing, blank or too long vin or license_plate.",
+            ),
+        },
     )
     @action(detail=False, methods=["get"], url_path="duplicate-check")
     def duplicate_check(self, request):
