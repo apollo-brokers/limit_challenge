@@ -255,6 +255,7 @@ class VehicleApiTests(FleetApiTestCase):
                 "year": 2022,
                 "active": True,
                 "office": {"id": self.office.pk, "name": "Calgary", "city": "Calgary"},
+                "maintenance_records": [],
             },
         )
 
