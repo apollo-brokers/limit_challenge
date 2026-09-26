@@ -616,6 +616,23 @@ class AdvancedSchemaTests(APITestCase):
         self.assertTrue(parameters["vin"]["required"])
         self.assertTrue(parameters["license_plate"]["required"])
 
+    def test_validating_endpoints_document_400_and_keep_200_schema(self):
+        paths = self.get_schema()["paths"]
+        cases = (
+            (paths["/api/v1/vehicles/"]["get"], "PaginatedVehicleList"),
+            (paths["/api/v1/vehicles/duplicate-check/"]["get"], "VehicleConflicts"),
+            (paths["/api/v1/vehicles/{id}/office/"]["put"], "Vehicle"),
+        )
+
+        for operation, component in cases:
+            with self.subTest(operation=operation["operationId"]):
+                responses = operation["responses"]
+                self.assertIn("400", responses)
+                self.assertEqual(
+                    responses["200"]["content"]["application/json"]["schema"]["$ref"],
+                    f"#/components/schemas/{component}",
+                )
+
     def test_report_responses_are_plain_lists(self):
         paths = self.get_schema()["paths"]
 

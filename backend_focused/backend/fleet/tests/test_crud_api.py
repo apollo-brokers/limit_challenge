@@ -659,6 +659,37 @@ class MaintenanceRecordApiTests(FleetApiTestCase):
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertIn(field, response.data)
 
+    def test_negative_cost_is_rejected(self):
+        record = self.create_record(vehicle=self.vehicle)
+        requests = (
+            ("post", "/api/v1/maintenance-records/", self.record_payload(cost="-0.01")),
+            ("patch", f"/api/v1/maintenance-records/{record.pk}/", {"cost": "-10.00"}),
+        )
+
+        for method, url, payload in requests:
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(url, payload, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(response.data["cost"][0].code, "min_value")
+                self.assertEqual(
+                    str(response.data["cost"][0]),
+                    "Ensure this value is greater than or equal to 0.",
+                )
+
+        record.refresh_from_db()
+        self.assertEqual(record.cost, Decimal("189.50"))
+
+    def test_zero_cost_is_accepted(self):
+        response = self.client.post(
+            "/api/v1/maintenance-records/",
+            self.record_payload(cost="0.00"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["cost"], "0.00")
+
 
 class ListQueryCountTests(FleetApiTestCase):
     """List endpoints must not issue one extra query per row."""
