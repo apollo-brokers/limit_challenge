@@ -142,12 +142,14 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'EXCEPTION_HANDLER': 'fleet.exceptions.exception_handler',
 }
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Fleet Maintenance API',
     'DESCRIPTION': 'Manage fleet vehicles and their maintenance history.',
     'VERSION': '1.0.0',
+    'COMPONENT_SPLIT_REQUEST': True,
     'APPEND_COMPONENTS': {
         'securitySchemes': {
             'jwtAuth': {
