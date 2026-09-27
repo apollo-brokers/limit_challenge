@@ -204,6 +204,8 @@ python manage.py spectacular --validate --fail-on-warn --file /dev/null
 
 ### Frontend
 
+Requires Node.js 20.19+ or 22.13+. Start the backend first.
+
 ```bash
 cd frontend
 npm install
@@ -211,7 +213,17 @@ npm install
 npm run dev
 ```
 
-Visit `http://localhost:3000` in your web browser to run it.
+Visit `http://localhost:3000` and sign in with the user from `createsuperuser`.
+
+#### Frontend checks
+
+```bash
+cd frontend
+npm run lint
+npx tsc --noEmit
+npm test
+npm run build
+```
 
 ## Deliverables
 
@@ -316,3 +328,46 @@ PostgreSQL and deployment, secrets and settings from the environment (`SECRET_KE
 `ALLOWED_HOSTS`, CORS, which currently allows all origins), JWT lifetime/rotation tuning, rate
 limiting, monitoring, turning concurrent unique-constraint errors into 400s, stronger input
 normalization, and office assignment history.
+
+## Frontend Implementation Notes
+
+### Screens
+
+| Screen | Endpoints |
+|---|---|
+| Login | `POST auth/token/`, `POST auth/token/refresh/` |
+| Vehicles: search, filters and pagination in the URL | `GET vehicles/?...`, `GET offices/` |
+| Vehicle details with the full maintenance history, delete | `GET vehicles/{id}/`, `DELETE vehicles/{id}/` |
+| Add maintenance (dialog on the vehicle page) | `POST maintenance-records/`, `GET mechanics/`, `GET maintenance-types/` |
+| New / edit vehicle | `POST vehicles/`, `PUT vehicles/{id}/` |
+| Maintenance due (the extra endpoint) | `GET vehicles/maintenance-due/` |
+
+### Assumptions
+
+- Vehicles are the main entity, so they get the full CRUD UI. Offices are read-only and only feed
+  the filter and the form. Maintenance records can be added from the vehicle page; editing or
+  deleting them, and managing mechanics and maintenance types, is done in the API (Swagger).
+- The maintenance form lists inactive mechanics too (marked "inactive"), because the API accepts
+  them and past work may need to be recorded. The date starts as today.
+- Filters apply when the user clicks Search, not on every keystroke, because `make` and `model`
+  match the whole value. Each search is a new URL, so links can be shared and browser back and
+  forward restore earlier searches.
+- The vehicle page shows the complete history from the details endpoint, without pagination.
+- Deleting a vehicle also deletes its history. The confirm dialog says so and suggests marking
+  the vehicle inactive instead.
+
+### Design decisions and tradeoffs
+
+- Pages render on the client. Data needs the JWT, which lives in the browser, so Server
+  Components cannot fetch it.
+- React Query holds server data, the URL holds search and page, and components hold form drafts.
+  No global store.
+- API types are written by hand from the OpenAPI schema. That is fewer moving parts than codegen
+  for this size.
+- Validation rules stay in the backend. The form shows the API's 400 messages next to each field.
+- Tokens are kept in `localStorage`. This is simple, but any script on the page can read them, so
+  an XSS bug would leak them. In production I would use httpOnly cookies set by the server. A 401
+  triggers one shared refresh and one retry. If the refresh fails, or the retried request gets a
+  401 again, the tokens are cleared and the user goes back to login.
+- Tests cover the logic that can break quietly: search params in the URL, API error parsing,
+  token refresh, the vehicle form and the maintenance form. There are no page or E2E tests.
