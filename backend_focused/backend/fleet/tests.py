@@ -1,10 +1,14 @@
+from datetime import date
+
+import pytest
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from fleet.models import Vehicle
 from fleet.services import VehicleService
+from maintenance.models import MaintenanceRecord, Mechanic
 from offices.models import Office
 
 
@@ -118,7 +122,6 @@ class VehicleApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("license_plate", response.data)
 
-
 class VehicleConflictServiceTests(TestCase):
     def setUp(self):
         self.service = VehicleService()
@@ -148,3 +151,158 @@ class VehicleConflictServiceTests(TestCase):
         )
 
         self.assertEqual(conflicts, [])
+
+
+@pytest.fixture
+def vehicle_search_data(db):
+    primary_office = Office.objects.create(name="Downtown Office", city="New York")
+    secondary_office = Office.objects.create(name="Uptown Office", city="Boston")
+
+    honda = Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=primary_office,
+    )
+    toyota = Vehicle.objects.create(
+        vin="1HGCM82633A004353",
+        license_plate="XYZ-9876",
+        make="Toyota",
+        model="Corolla",
+        year=2020,
+        office=secondary_office,
+        active=False,
+    )
+    ford = Vehicle.objects.create(
+        vin="1HGCM82633A004354",
+        license_plate="DEF-5678",
+        make="Ford",
+        model="Focus",
+        year=2021,
+        office=primary_office,
+    )
+
+    mechanic = Mechanic.objects.create(
+        name="Jane Smith",
+        certification_number="ASE-001",
+    )
+    other_mechanic = Mechanic.objects.create(
+        name="John Smith",
+        certification_number="ASE-999",
+    )
+
+    for maintenance_date in [date(2026, 2, 1), date(2026, 3, 1)]:
+        MaintenanceRecord.objects.create(
+            vehicle=honda,
+            mechanic=mechanic,
+            maintenance_date=maintenance_date,
+            maintenance_type="Inspection",
+            cost="100.00",
+        )
+
+    MaintenanceRecord.objects.create(
+        vehicle=toyota,
+        mechanic=mechanic,
+        maintenance_date=date(2025, 1, 1),
+        maintenance_type="Inspection",
+        cost="100.00",
+    )
+    MaintenanceRecord.objects.create(
+        vehicle=ford,
+        mechanic=other_mechanic,
+        maintenance_date=date(2026, 4, 1),
+        maintenance_type="Inspection",
+        cost="100.00",
+    )
+
+    return {
+        "client": APIClient(),
+        "primary_office": primary_office,
+        "secondary_office": secondary_office,
+        "honda": honda,
+        "toyota": toyota,
+        "ford": ford,
+    }
+
+
+@pytest.mark.parametrize(
+    ("filter_name", "expected_vehicle"),
+    [
+        ("office", "toyota"),
+        ("active", "toyota"),
+        ("make", "honda"),
+        ("model", "toyota"),
+    ],
+)
+def test_filters_by_vehicle_fields(vehicle_search_data, filter_name, expected_vehicle):
+    filter_values = {
+        "office": vehicle_search_data["secondary_office"].id,
+        "active": "false",
+        "make": "honda",
+        "model": "corolla",
+    }
+
+    response = vehicle_search_data["client"].get(
+        reverse("vehicle-list"),
+        {filter_name: filter_values[filter_name]},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["id"] == vehicle_search_data[
+        expected_vehicle
+    ].id
+
+
+@pytest.mark.parametrize(
+    ("query_params", "expected_vehicles"),
+    [
+        ({"maintenance_date_after": "2026-01-01"}, {"honda", "ford"}),
+        ({"maintenance_date_before": "2025-12-31"}, {"toyota"}),
+        ({"mechanic_certification_number": "ase-001"}, {"honda", "toyota"}),
+        (
+            {
+                "maintenance_date_after": "2026-01-01",
+                "maintenance_date_before": "2026-12-31",
+                "mechanic_certification_number": "ase-001",
+            },
+            {"honda"},
+        ),
+    ],
+    ids=["date-after", "date-before", "mechanic", "combined"],
+)
+def test_filters_by_maintenance(
+    vehicle_search_data,
+    query_params,
+    expected_vehicles,
+):
+    response = vehicle_search_data["client"].get(
+        reverse("vehicle-list"),
+        query_params,
+    )
+
+    expected_ids = {
+        vehicle_search_data[vehicle_name].id
+        for vehicle_name in expected_vehicles
+    }
+    response_ids = {vehicle["id"] for vehicle in response.data["results"]}
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["count"] == len(expected_ids)
+    assert response_ids == expected_ids
+
+
+@pytest.mark.parametrize(
+    "parameter",
+    ["maintenance_date_after", "maintenance_date_before"],
+)
+def test_rejects_invalid_maintenance_date_filter(vehicle_search_data, parameter):
+    response = vehicle_search_data["client"].get(
+        reverse("vehicle-list"),
+        {parameter: "not-a-date"},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "maintenance_date" in response.data
