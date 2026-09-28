@@ -32,7 +32,7 @@ flowchart LR
 
     ORM --> DB[(Database)]
 
-    DB --> C1[Constraints<br/>VIN / Active Plate / Cost]
+    DB --> C1[Constraints<br/>Catalogs / VIN / Active Plate / Cost]
     DB --> I[Query-driven Indexes]
 ```
 
@@ -44,10 +44,16 @@ The API validates input to provide useful client errors, but invariants that mus
 
 Examples in [`fleet/models.py`](../backend/fleet/models.py):
 
+- `VehicleMake` is canonical reference data, with a globally unique `name`.
+- `VehicleModel` belongs to one `VehicleMake`, and the `(make, name)` pair is unique. The same
+  model name can therefore exist under different makes.
+- `Vehicle` stores only its `model_id`; its make is always derived through `model.make`. This
+  removes the possibility of storing an inconsistent make/model pair on a vehicle.
 - `Vehicle.vin` is globally unique.
 - Active vehicles cannot share a license plate. This is implemented with a conditional `UniqueConstraint(..., condition=Q(active=True))`, so an inactive vehicle does not permanently reserve a plate.
+- `Mechanic.certification_number` is globally unique.
 - `MaintenanceRecord.cost` has both a `MinValueValidator` and a database `CheckConstraint(cost__gte=0)`.
-- Office, mechanic, and maintenance-type relationships use `PROTECT` where deleting the parent would invalidate existing records.
+- Office, vehicle-make, vehicle-model, mechanic, and maintenance-type relationships use `PROTECT` where deleting the parent would invalidate existing records.
 - Vehicle deletion uses `CASCADE` for maintenance history; operational retirement is represented by `active=false`.
 
 The active-plate rule is a useful example of the boundary between application and database concerns: serializer validation provides a clear HTTP 400, while the database remains the final authority on integrity.
@@ -58,7 +64,8 @@ Several requirements are easy to implement functionally but easy to implement po
 
 | Problem | Decision | Result |
 |---|---|---|
-| Vehicle detail with hundreds of records | `select_related` + targeted `Prefetch` | 300 maintenance records in exactly 2 queries |
+| Vehicle detail with hundreds of records | `select_related("office", "model__make")` + targeted `Prefetch` | 300 maintenance records in exactly 2 queries |
+| Vehicle and maintenance-record reads | Join normalized catalog paths up front | No per-row make/model queries |
 | Combined maintenance filters | One correlated `EXISTS` subquery | Same-record semantics, no duplicate vehicle rows |
 | Office summary | Filtered aggregates + `Count(distinct=True)` | 1 query |
 | Mechanic workload | Filtered aggregates | 1 query |
@@ -66,9 +73,19 @@ Several requirements are easy to implement functionally but easy to implement po
 
 The implementation is in [`fleet/selectors.py`](../backend/fleet/selectors.py), with the HTTP boundary in [`fleet/views.py`](../backend/fleet/views.py).
 
+Vehicle querysets use `select_related("office", "model__make")`, including the
+maintenance-due selector. Maintenance-record reads follow the normalized relationship with
+`select_related("vehicle__model__make", "mechanic", "type")`. Vehicle detail keeps its bounded
+two-query guarantee: one query loads the vehicle with its office, model, and make, and one
+prefetch query loads the complete maintenance history with each record's mechanic and type.
+
 ### Why `EXISTS` for vehicle search
 
-The vehicle search can combine a maintenance date range with a mechanic certification number. Those predicates must match the **same maintenance record**.
+Vehicle make and model filters accept catalog IDs, not textual names. When both are supplied,
+the selected model must belong to the selected make; an incompatible pair returns HTTP 400.
+
+The vehicle search can also combine a maintenance date range with a mechanic certification
+number. Those predicates must match the **same maintenance record**.
 
 A normal join can duplicate vehicle rows and usually pushes the implementation toward `DISTINCT`. Separate joins can be worse: one maintenance row could satisfy the date filter while another satisfies the mechanic filter.
 
@@ -105,7 +122,11 @@ All application endpoints are versioned under `/api/v1/`.
 
 The project uses DRF serializers for request validation and `drf-spectacular` for the OpenAPI contract. Swagger exposes the API for manual inspection, and JWT authentication is enabled as an optional challenge bonus.
 
-The API intentionally keeps read and write relationships asymmetric where it improves usability: related objects are nested on reads, while writes use IDs such as `office_id`, `vehicle_id`, `mechanic_id`, and `type_id`.
+The API intentionally keeps read and write relationships asymmetric where it improves usability:
+related objects are nested on reads, while writes use IDs. In particular, vehicle writes accept
+`model_id` and derive the make; they do not accept make or model names, or `make_id`. VehicleModel
+writes accept `make_id`. Other relationships use `office_id`, `vehicle_id`, `mechanic_id`, and
+`type_id`.
 
 See [`fleet/views.py`](../backend/fleet/views.py), [`fleet/serializers.py`](../backend/fleet/serializers.py), and the generated API documentation described in the [README](../README.md).
 
@@ -115,9 +136,14 @@ The test suite does more than verify response payloads.
 
 It explicitly checks:
 
-- database constraints through direct ORM writes;
-- API validation independently from database integrity;
-- query ceilings using `assertNumQueries`;
+- normalized make/model catalog constraints and the rule that a vehicle derives its make from
+  its model;
+- database constraints through direct ORM writes, including unique mechanic certification
+  numbers;
+- API validation independently from database integrity, including ID-based catalog filters and
+  incompatible make/model pairs;
+- query ceilings using `assertNumQueries` for vehicle lists and writes, vehicle-model lists,
+  maintenance-record lists, filtered search, and advanced endpoints;
 - the 300-record vehicle-detail case;
 - search semantics and date boundaries;
 - OpenAPI paths, responses, and security declarations;
@@ -126,25 +152,19 @@ It explicitly checks:
 Examples are in:
 
 - [`test_models.py`](../backend/fleet/tests/test_models.py)
+- [`test_crud_api.py`](../backend/fleet/tests/test_crud_api.py)
 - [`test_selectors.py`](../backend/fleet/tests/test_selectors.py)
 - [`test_advanced_api.py`](../backend/fleet/tests/test_advanced_api.py)
 
 This turns performance-sensitive decisions into regression checks instead of leaving them as comments or assumptions.
 
-## 6. Engineering workflow and repository harness
+## 6. CI and quality gates
 
-AI-assisted development was used under repository-level engineering constraints rather than as an unrestricted code generator.
-
-[`AGENTS.md`](../AGENTS.md) captures durable rules such as:
-
-- keep the README as the source of truth;
-- enforce invariants at the appropriate layer;
-- treat N+1 prevention as correctness;
-- keep application endpoints under `/api/v1/`;
-- keep tests, migrations, and OpenAPI validation passing;
-- avoid abstractions and dependencies without concrete value.
-
-Implementation planning and scratch material were kept outside the committed product surface. The committed repository contains the resulting code, tests, documentation, and durable engineering guidance.
+GitHub Actions runs separate backend and frontend jobs on pull requests to `main` and pushes to
+`main`. The backend job installs the Python dependencies, runs Django system checks, verifies
+that migrations are current, executes the test suite, and validates the OpenAPI schema. The
+frontend job installs locked npm dependencies, then runs linting, TypeScript checks, tests, and
+the production build.
 
 ## 7. Intentional tradeoffs and production boundaries
 
