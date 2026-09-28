@@ -251,6 +251,9 @@ Authentication using JWT is not required but welcome if time allows.
 
 ## Backend Implementation Notes
 
+For the main architecture, query-performance decisions, and backend tradeoffs, see
+[System Design Notes](docs/SYSTEM_DESIGN.md).
+
 ### Endpoints
 
 All Fleet API endpoints are under `/api/v1/` and return JSON. Lists are paginated with `?page=` (10 per page) unless noted.
