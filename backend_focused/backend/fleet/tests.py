@@ -41,7 +41,7 @@ class VehicleApiTests(APITestCase):
         detail_url = reverse("vehicle-detail", args=[vehicle_id])
         detail_response = self.client.get(detail_url)
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(detail_response.data["office"], self.office.id)
+        self.assertEqual(detail_response.data["office"]["id"], self.office.id)
 
         update_response = self.client.patch(
             detail_url,
@@ -304,3 +304,52 @@ def test_rejects_invalid_maintenance_date_filter(vehicle_search_data, parameter)
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "maintenance_date" in response.data
+
+
+@pytest.mark.django_db
+def test_vehicle_detail_includes_office_and_maintenance_history(
+    django_assert_num_queries,
+):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    vehicle = Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=office,
+    )
+    mechanic = Mechanic.objects.create(
+        name="Jane Smith",
+        certification_number="ASE-001",
+    )
+
+    for maintenance_date in [date(2025, 1, 1), date(2026, 1, 1)]:
+        MaintenanceRecord.objects.create(
+            vehicle=vehicle,
+            mechanic=mechanic,
+            maintenance_date=maintenance_date,
+            maintenance_type="Inspection",
+            cost="100.00",
+            notes="Routine inspection",
+        )
+
+    with django_assert_num_queries(2):
+        response = APIClient().get(reverse("vehicle-detail", args=[vehicle.id]))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["office"] == {
+        "id": office.id,
+        "name": office.name,
+        "city": office.city,
+    }
+    assert len(response.data["maintenance_records"]) == 2
+
+    for maintenance_record in response.data["maintenance_records"]:
+        assert maintenance_record["vehicle"] == vehicle.id
+        assert maintenance_record["mechanic"] == {
+            "id": mechanic.id,
+            "name": mechanic.name,
+            "certification_number": mechanic.certification_number,
+            "active": mechanic.active,
+        }

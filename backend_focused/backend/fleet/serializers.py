@@ -2,6 +2,8 @@ from rest_framework import serializers
 
 from fleet.models import Vehicle
 from fleet.services import VehicleConflictError, VehicleService
+from maintenance.serializers import MaintenanceRecordDetailSerializer
+from offices.serializers import OfficeSerializer
 
 CONFLICT_MESSAGES = {
     "vin": "A vehicle with this VIN already exists.",
@@ -29,3 +31,15 @@ class VehicleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {field: CONFLICT_MESSAGES[field] for field in error.conflicts}
             ) from error
+
+
+class VehicleDetailSerializer(serializers.ModelSerializer):
+    office = OfficeSerializer(read_only=True)
+    maintenance_records = MaintenanceRecordDetailSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = Vehicle
+        fields = "__all__"

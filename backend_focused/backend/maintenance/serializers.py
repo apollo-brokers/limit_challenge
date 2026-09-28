@@ -13,3 +13,11 @@ class MaintenanceRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceRecord
         fields = "__all__"
+
+
+class MaintenanceRecordDetailSerializer(serializers.ModelSerializer):
+    mechanic = MechanicSerializer(read_only=True)
+
+    class Meta:
+        model = MaintenanceRecord
+        fields = "__all__"
