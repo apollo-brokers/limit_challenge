@@ -25,10 +25,13 @@ class VehicleService:
         if vehicles.filter(vin__iexact=vin).exists():
             conflicts.append("vin")
 
-        if active and vehicles.filter(
-            license_plate__iexact=license_plate,
-            active=True,
-        ).exists():
+        if (
+            active
+            and vehicles.filter(
+                license_plate__iexact=license_plate,
+                active=True,
+            ).exists()
+        ):
             conflicts.append("license_plate")
 
         return conflicts

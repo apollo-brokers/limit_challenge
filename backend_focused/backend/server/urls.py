@@ -6,7 +6,6 @@ from fleet.views import VehicleViewSet
 from maintenance.views import MaintenanceRecordViewSet, MechanicViewSet
 from offices.views import OfficeViewSet
 
-
 router = DefaultRouter()
 router.register("offices", OfficeViewSet, basename="office")
 router.register("vehicles", VehicleViewSet, basename="vehicle")

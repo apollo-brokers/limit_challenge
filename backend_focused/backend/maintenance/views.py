@@ -8,6 +8,7 @@ class MechanicViewSet(viewsets.ModelViewSet):
     queryset = Mechanic.objects.order_by("id")
     serializer_class = MechanicSerializer
 
+
 class MaintenanceRecordViewSet(viewsets.ModelViewSet):
     queryset = MaintenanceRecord.objects.order_by("id")
     serializer_class = MaintenanceRecordSerializer

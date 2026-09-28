@@ -9,21 +9,36 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('offices', '0001_initial'),
+        ("offices", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Vehicle',
+            name="Vehicle",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('vin', models.CharField(max_length=17)),
-                ('license_plate', models.CharField(max_length=20)),
-                ('make', models.CharField(max_length=100)),
-                ('model', models.CharField(max_length=100)),
-                ('year', models.PositiveSmallIntegerField()),
-                ('active', models.BooleanField(default=True)),
-                ('office', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='vehicles', to='offices.office')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("vin", models.CharField(max_length=17)),
+                ("license_plate", models.CharField(max_length=20)),
+                ("make", models.CharField(max_length=100)),
+                ("model", models.CharField(max_length=100)),
+                ("year", models.PositiveSmallIntegerField()),
+                ("active", models.BooleanField(default=True)),
+                (
+                    "office",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="vehicles",
+                        to="offices.office",
+                    ),
+                ),
             ],
         ),
     ]

@@ -122,6 +122,7 @@ class VehicleApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("license_plate", response.data)
 
+
 class VehicleConflictServiceTests(TestCase):
     def setUp(self):
         self.service = VehicleService()
@@ -251,9 +252,7 @@ def test_filters_by_vehicle_fields(vehicle_search_data, filter_name, expected_ve
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data["count"] == 1
-    assert response.data["results"][0]["id"] == vehicle_search_data[
-        expected_vehicle
-    ].id
+    assert response.data["results"][0]["id"] == vehicle_search_data[expected_vehicle].id
 
 
 @pytest.mark.parametrize(
@@ -284,8 +283,7 @@ def test_filters_by_maintenance(
     )
 
     expected_ids = {
-        vehicle_search_data[vehicle_name].id
-        for vehicle_name in expected_vehicles
+        vehicle_search_data[vehicle_name].id for vehicle_name in expected_vehicles
     }
     response_ids = {vehicle["id"] for vehicle in response.data["results"]}
 
