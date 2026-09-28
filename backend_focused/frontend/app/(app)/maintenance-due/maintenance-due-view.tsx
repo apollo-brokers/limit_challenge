@@ -124,7 +124,7 @@ export default function MaintenanceDueView() {
                       </MuiLink>
                     </TableCell>
                     <TableCell>
-                      {vehicle.make} {vehicle.model} ({vehicle.year})
+                      {vehicle.make.name} {vehicle.model.name} ({vehicle.year})
                     </TableCell>
                     <TableCell>{vehicle.office.name}</TableCell>
                     <TableCell>

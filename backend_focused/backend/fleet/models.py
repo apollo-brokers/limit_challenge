@@ -12,11 +12,42 @@ class Office(models.Model):
         return f"{self.name} ({self.city})"
 
 
+class VehicleMake(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class VehicleModel(models.Model):
+    make = models.ForeignKey(
+        VehicleMake,
+        related_name="models",
+        on_delete=models.PROTECT,
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("make", "name"),
+                name="uniq_vehicle_model_per_make",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.make} {self.name}"
+
+
 class Vehicle(models.Model):
     vin = models.CharField(max_length=17, unique=True)
     license_plate = models.CharField(max_length=20)
-    make = models.CharField(max_length=100)
-    model = models.CharField(max_length=100)
+    # The make is always model.make. Storing it here too could create a make/model mismatch.
+    model = models.ForeignKey(
+        VehicleModel,
+        related_name="vehicles",
+        on_delete=models.PROTECT,
+    )
     year = models.PositiveSmallIntegerField()
     office = models.ForeignKey(
         Office,
@@ -41,12 +72,12 @@ class Vehicle(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.make} {self.model} ({self.license_plate})"
+        return f"{self.model} ({self.license_plate})"
 
 
 class Mechanic(models.Model):
     name = models.CharField(max_length=120)
-    certification_number = models.CharField(max_length=64, db_index=True)
+    certification_number = models.CharField(max_length=64, unique=True)
     active = models.BooleanField(default=True)
 
     def __str__(self):

@@ -11,6 +11,8 @@ from fleet.models import (
     Mechanic,
     Office,
     Vehicle,
+    VehicleMake,
+    VehicleModel,
 )
 
 
@@ -58,14 +60,27 @@ class Command(BaseCommand):
             maintenance_type, _ = MaintenanceType.objects.get_or_create(name=name)
             maintenance_types[name] = maintenance_type
 
+        vehicle_models = {}
+        for make_name, model_names in (
+            ("Ram", ("ProMaster",)),
+            ("Ford", ("Transit", "F-150")),
+            ("Chevrolet", ("Express",)),
+        ):
+            make, _ = VehicleMake.objects.get_or_create(name=make_name)
+            for model_name in model_names:
+                vehicle_model, _ = VehicleModel.objects.get_or_create(
+                    make=make,
+                    name=model_name,
+                )
+                vehicle_models[(make_name, model_name)] = vehicle_model
+
         vehicles = {}
         for vin, defaults in (
             (
                 "1FTBR1C80NKA10001",
                 {
                     "license_plate": "FLT-NONE",
-                    "make": "Ram",
-                    "model": "ProMaster",
+                    "model": vehicle_models[("Ram", "ProMaster")],
                     "year": 2023,
                     "office": offices["Calgary Operations"],
                     "active": True,
@@ -75,8 +90,7 @@ class Command(BaseCommand):
                 "1FTBR1C80NKA10002",
                 {
                     "license_plate": "FLT-RECENT",
-                    "make": "Ford",
-                    "model": "Transit",
+                    "model": vehicle_models[("Ford", "Transit")],
                     "year": 2022,
                     "office": offices["Calgary Operations"],
                     "active": True,
@@ -86,8 +100,7 @@ class Command(BaseCommand):
                 "1FTBR1C80NKA10003",
                 {
                     "license_plate": "FLT-STALE",
-                    "make": "Chevrolet",
-                    "model": "Express",
+                    "model": vehicle_models[("Chevrolet", "Express")],
                     "year": 2019,
                     "office": offices["Edmonton Operations"],
                     "active": True,
@@ -97,8 +110,7 @@ class Command(BaseCommand):
                 "1FTBR1C80NKA10004",
                 {
                     "license_plate": "FLT-REUSE",
-                    "make": "Ford",
-                    "model": "F-150",
+                    "model": vehicle_models[("Ford", "F-150")],
                     "year": 2024,
                     "office": offices["Vancouver Operations"],
                     "active": True,
@@ -108,8 +120,7 @@ class Command(BaseCommand):
                 "1FTBR1C80NKA10005",
                 {
                     "license_plate": "FLT-REUSE",
-                    "make": "Ford",
-                    "model": "F-150",
+                    "model": vehicle_models[("Ford", "F-150")],
                     "year": 2018,
                     "office": offices["Edmonton Operations"],
                     "active": False,
@@ -159,6 +170,6 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(
-            "Fleet seed data ready: 3 offices, 5 vehicles, "
-            "3 mechanics, 4 maintenance types, 3 maintenance records."
+            "Fleet seed data ready: 3 offices, 3 vehicle makes, 4 vehicle models, "
+            "5 vehicles, 3 mechanics, 4 maintenance types, 3 maintenance records."
         )

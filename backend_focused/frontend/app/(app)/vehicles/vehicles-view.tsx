@@ -24,7 +24,7 @@ import StatusChip from '@/components/status-chip';
 import { apiClient } from '@/lib/api-client';
 import { getErrorStatus, parseApiError } from '@/lib/api-errors';
 import { MONO_FONT } from '@/lib/format';
-import { useOffices } from '@/lib/lookups';
+import { useOffices, useVehicleMakes, useVehicleModels } from '@/lib/lookups';
 import { PAGE_SIZE, type Paginated, type Vehicle } from '@/lib/types';
 import {
   EMPTY_FILTERS,
@@ -46,6 +46,8 @@ export default function VehiclesView() {
   const queryString = toSearchParams(search).toString();
   const filtersKey = toSearchParams({ filters: search.filters, page: 1 }).toString();
   const offices = useOffices();
+  const makes = useVehicleMakes();
+  const models = useVehicleModels();
 
   const vehicles = useQuery({
     queryKey: ['vehicles', 'list', queryString],
@@ -87,6 +89,9 @@ export default function VehiclesView() {
         initial={search.filters}
         offices={offices.data}
         officesFailed={offices.isError}
+        makes={makes.data}
+        models={models.data}
+        catalogFailed={makes.isError || models.isError}
         errors={filterErrors}
         onSearch={(filters: VehicleFilters) => navigate({ filters, page: 1 })}
         onClear={clearFilters}
@@ -162,7 +167,7 @@ export default function VehiclesView() {
                     </TableCell>
                     <TableCell sx={{ fontFamily: MONO_FONT }}>{vehicle.vin}</TableCell>
                     <TableCell>
-                      {vehicle.make} {vehicle.model}
+                      {vehicle.make.name} {vehicle.model.name}
                     </TableCell>
                     <TableCell>{vehicle.year}</TableCell>
                     <TableCell>{vehicle.office.name}</TableCell>

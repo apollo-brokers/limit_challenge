@@ -5,7 +5,14 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from fleet.models import MaintenanceRecord, Mechanic, Office, Vehicle
+from fleet.models import (
+    MaintenanceRecord,
+    Mechanic,
+    Office,
+    Vehicle,
+    VehicleMake,
+    VehicleModel,
+)
 from fleet.tests.test_crud_api import FleetApiTestCase
 
 
@@ -14,8 +21,7 @@ class AdvancedApiTestCase(FleetApiTestCase):
         values = {
             "vin": f"VIN-{license_plate}",
             "license_plate": license_plate,
-            "make": "Ford",
-            "model": "Transit",
+            "model": self.transit,
             "year": 2022,
             "office": self.office,
             "active": True,
@@ -122,14 +128,22 @@ class VehicleSearchApiTests(AdvancedApiTestCase):
     def result_ids(self, response):
         return [row["id"] for row in response.data["results"]]
 
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.f150 = VehicleModel.objects.create(make=cls.ford, name="F-150")
+        cls.ram = VehicleMake.objects.create(name="Ram")
+        cls.promaster = VehicleModel.objects.create(make=cls.ram, name="ProMaster")
+
     def test_combines_all_filters(self):
         other_mechanic = Mechanic.objects.create(name="Sam Lee", certification_number="CERT-002")
         match = self.make_vehicle("AB-1001")
         inactive = self.make_vehicle("AB-1002", active=False)
         other_office = self.make_vehicle("AB-1003", office=self.other_office)
-        other_make = self.make_vehicle("AB-1004", make="Ram")
+        other_make = self.make_vehicle("AB-1004", model=self.promaster)
+        other_model = self.make_vehicle("AB-1006", model=self.f150)
         wrong_mechanic = self.make_vehicle("AB-1005")
-        for vehicle in (match, inactive, other_office, other_make):
+        for vehicle in (match, inactive, other_office, other_make, other_model):
             self.add_record(vehicle, date(2026, 4, 10))
         self.add_record(wrong_mechanic, date(2026, 4, 10), mechanic=other_mechanic)
 
@@ -138,8 +152,8 @@ class VehicleSearchApiTests(AdvancedApiTestCase):
             {
                 "office": self.office.pk,
                 "active": "true",
-                "make": "ford",
-                "model": "transit",
+                "make": self.ford.pk,
+                "model": self.transit.pk,
                 "maintained_from": "2026-04-01",
                 "maintained_to": "2026-04-30",
                 "mechanic_certification": "CERT-001",
@@ -149,6 +163,59 @@ class VehicleSearchApiTests(AdvancedApiTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(self.result_ids(response), [match.pk])
+
+    def test_make_id_matches_every_model_of_that_make(self):
+        transit = self.make_vehicle("AB-1001")
+        f150 = self.make_vehicle("AB-1002", model=self.f150)
+        self.make_vehicle("AB-1003", model=self.promaster)
+
+        response = self.client.get(self.url, {"make": self.ford.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.result_ids(response), [transit.pk, f150.pk])
+
+    def test_model_id_can_be_sent_without_make(self):
+        self.make_vehicle("AB-1001")
+        f150 = self.make_vehicle("AB-1002", model=self.f150)
+
+        response = self.client.get(self.url, {"model": self.f150.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.result_ids(response), [f150.pk])
+
+    def test_compatible_make_and_model_ids_are_combined(self):
+        transit = self.make_vehicle("AB-1001")
+        self.make_vehicle("AB-1002", model=self.f150)
+
+        response = self.client.get(self.url, {"make": self.ford.pk, "model": self.transit.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.result_ids(response), [transit.pk])
+
+    def test_model_from_another_make_returns_400(self):
+        self.make_vehicle("AB-1001")
+
+        response = self.client.get(self.url, {"make": self.ram.pk, "model": self.transit.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data,
+            {
+                "model": [
+                    f"Model {self.transit.pk} does not belong to make {self.ram.pk}."
+                ]
+            },
+        )
+
+    def test_make_and_model_names_are_not_accepted(self):
+        self.make_vehicle("AB-1001")
+
+        for params, field in (({"make": "Ford"}, "make"), ({"model": "Transit"}, "model")):
+            with self.subTest(params=params):
+                response = self.client.get(self.url, params)
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(field, response.data)
 
     def test_active_false_returns_only_inactive_vehicles(self):
         self.make_vehicle("AB-1001")
@@ -164,7 +231,7 @@ class VehicleSearchApiTests(AdvancedApiTestCase):
 
         response = self.client.get(
             self.url,
-            {"make": "", "office": "", "active": "", "maintained_from": ""},
+            {"make": "", "model": "", "office": "", "active": "", "maintained_from": ""},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -175,6 +242,9 @@ class VehicleSearchApiTests(AdvancedApiTestCase):
             ({"active": "maybe"}, "active"),
             ({"office": "abc"}, "office"),
             ({"office": 999999}, "office"),
+            ({"make": 999999}, "make"),
+            ({"model": 999999}, "model"),
+            ({"make": "1.5"}, "make"),
             ({"maintained_from": "2026-13-01"}, "maintained_from"),
             ({"maintained_to": "yesterday"}, "maintained_to"),
             ({"maintained_from": "2026-05-01", "maintained_to": "2026-04-01"}, "maintained_to"),
@@ -189,34 +259,46 @@ class VehicleSearchApiTests(AdvancedApiTestCase):
     def test_filters_work_with_pagination(self):
         for index in range(12):
             self.make_vehicle(f"AB-{1000 + index}")
-        self.make_vehicle("ZZ-0001", make="Ram")
+        self.make_vehicle("ZZ-0001", model=self.promaster)
 
-        response = self.client.get(self.url, {"make": "Ford", "page": 2})
+        response = self.client.get(self.url, {"make": self.ford.pk, "page": 2})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 12)
         self.assertEqual(len(response.data["results"]), 2)
 
     def test_query_count_does_not_grow_with_rows(self):
-        for index in range(5):
-            vehicle = self.make_vehicle(f"AB-100{index}")
+        for index in range(6):
+            model = (self.transit, self.f150)[index % 2]
+            vehicle = self.make_vehicle(f"AB-100{index}", model=model)
             self.add_record(vehicle, date(2026, 4, 10))
             self.add_record(vehicle, date(2026, 4, 11))
         params = {
-            "make": "Ford",
             "maintained_from": "2026-04-01",
             "mechanic_certification": "CERT-001",
         }
 
-        # COUNT + page SELECT joined with offices.
+        # COUNT + page SELECT joined with offices, models and makes.
         with self.assertNumQueries(2):
             response = self.client.get(self.url, params)
-        self.assertEqual(len(response.data["results"]), 5)
+        self.assertEqual(len(response.data["results"]), 6)
 
-        # One more query validates the office id.
+        # One more query validates each id parameter.
         with self.assertNumQueries(3):
-            response = self.client.get(self.url, {**params, "office": self.office.pk})
-        self.assertEqual(len(response.data["results"]), 5)
+            response = self.client.get(self.url, {**params, "make": self.ford.pk})
+        self.assertEqual(len(response.data["results"]), 6)
+
+        with self.assertNumQueries(5):
+            response = self.client.get(
+                self.url,
+                {
+                    **params,
+                    "office": self.office.pk,
+                    "make": self.ford.pk,
+                    "model": self.f150.pk,
+                },
+            )
+        self.assertEqual(len(response.data["results"]), 3)
 
 
 def bulk_records(vehicle, mechanics, maintenance_type, total):
@@ -249,6 +331,8 @@ class VehicleDetailApiTests(AdvancedApiTestCase):
             response.data["office"],
             {"id": self.office.pk, "name": "Calgary", "city": "Calgary"},
         )
+        self.assertEqual(response.data["make"], {"id": self.ford.pk, "name": "Ford"})
+        self.assertEqual(response.data["model"], {"id": self.transit.pk, "name": "Transit"})
         records = response.data["maintenance_records"]
         self.assertEqual(
             [record["id"] for record in records],
@@ -276,17 +360,37 @@ class VehicleDetailApiTests(AdvancedApiTestCase):
         other_mechanic = Mechanic.objects.create(name="Sam Lee", certification_number="CERT-002")
         bulk_records(vehicle, [self.mechanic, other_mechanic], self.maintenance_type, 300)
 
-        # Vehicle joined with office, then all records joined with mechanic and type.
+        # Vehicle joined with office, model and make, then all records joined with mechanic
+        # and type.
         with self.assertNumQueries(2):
             response = self.client.get(self.url(vehicle.pk))
 
         self.assertEqual(len(response.data["maintenance_records"]), 300)
+        self.assertEqual(response.data["make"]["name"], "Ford")
+
+    def test_retrieve_query_count_is_constant_as_history_grows(self):
+        vehicle = self.make_vehicle("AB-1001")
+        mechanics = [
+            Mechanic.objects.create(name=f"Mechanic {index}", certification_number=f"C-{index}")
+            for index in range(5)
+        ]
+
+        for total in (1, 500):
+            MaintenanceRecord.objects.filter(vehicle=vehicle).delete()
+            bulk_records(vehicle, mechanics, self.maintenance_type, total)
+            with self.subTest(records=total), self.assertNumQueries(2):
+                response = self.client.get(self.url(vehicle.pk))
+            self.assertEqual(len(response.data["maintenance_records"]), total)
 
     def test_write_responses_keep_crud_shape(self):
         vehicle = self.make_vehicle("AB-1001")
         self.add_record(vehicle, date(2026, 1, 10))
 
-        response = self.client.patch(self.url(vehicle.pk), {"model": "E-Transit"}, format="json")
+        response = self.client.patch(
+            self.url(vehicle.pk),
+            {"model_id": self.transit.pk},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("maintenance_records", response.data)
@@ -355,7 +459,8 @@ class AssignVehicleOfficeApiTests(AdvancedApiTestCase):
     def test_moves_vehicle_to_new_office(self):
         vehicle = self.make_vehicle("AB-1001")
 
-        # Vehicle lookup, office id validation, UPDATE of office_id only.
+        # Vehicle lookup joined with office, model and make, office id validation, UPDATE of
+        # office_id only.
         with self.assertNumQueries(3):
             response = self.client.put(
                 self.url(vehicle.pk),
@@ -370,8 +475,8 @@ class AssignVehicleOfficeApiTests(AdvancedApiTestCase):
                 "id": vehicle.pk,
                 "vin": "VIN-AB-1001",
                 "license_plate": "AB-1001",
-                "make": "Ford",
-                "model": "Transit",
+                "make": {"id": self.ford.pk, "name": "Ford"},
+                "model": {"id": self.transit.pk, "name": "Transit"},
                 "year": 2022,
                 "active": True,
                 "office": {"id": self.other_office.pk, "name": "Edmonton", "city": "Edmonton"},
@@ -466,8 +571,8 @@ class MaintenanceDueApiTests(AdvancedApiTestCase):
                 "id": stale.pk,
                 "vin": "VIN-AB-1001",
                 "license_plate": "AB-1001",
-                "make": "Ford",
-                "model": "Transit",
+                "make": {"id": self.ford.pk, "name": "Ford"},
+                "model": {"id": self.transit.pk, "name": "Transit"},
                 "year": 2022,
                 "active": True,
                 "office": {"id": self.office.pk, "name": "Calgary", "city": "Calgary"},
@@ -476,15 +581,21 @@ class MaintenanceDueApiTests(AdvancedApiTestCase):
         )
 
     def test_uses_two_queries(self):
-        for index in range(5):
-            vehicle = self.make_vehicle(f"AB-100{index}")
+        ram = VehicleMake.objects.create(name="Ram")
+        models = (self.transit, VehicleModel.objects.create(make=ram, name="ProMaster"))
+        for index in range(6):
+            vehicle = self.make_vehicle(f"AB-100{index}", model=models[index % 2])
             self.add_record(vehicle, timezone.localdate() - timedelta(days=500))
 
-        # COUNT + page SELECT with office join and last-maintenance subquery.
+        # COUNT + page SELECT with office, model and make joins and last-maintenance subquery.
         with self.assertNumQueries(2):
             response = self.client.get(self.url)
 
-        self.assertEqual(len(response.data["results"]), 5)
+        self.assertEqual(len(response.data["results"]), 6)
+        self.assertEqual(
+            {row["make"]["name"] for row in response.data["results"]},
+            {"Ford", "Ram"},
+        )
 
 
 class DuplicateCheckApiTests(AdvancedApiTestCase):
@@ -554,7 +665,7 @@ ADVANCED_ENDPOINTS = (
     ("get", "/api/v1/vehicles/duplicate-check/?vin=VIN-NEW&license_plate=NEW-1"),
     ("get", "/api/v1/vehicles/1/maintenance-records/"),
     ("put", "/api/v1/vehicles/1/office/"),
-    ("get", "/api/v1/vehicles/?make=Ford"),
+    ("get", "/api/v1/vehicles/?make=1"),
 )
 
 
@@ -607,6 +718,16 @@ class AdvancedSchemaTests(APITestCase):
             },
             names,
         )
+
+    def test_vehicle_search_make_and_model_are_integer_ids(self):
+        operation = self.get_schema()["paths"]["/api/v1/vehicles/"]["get"]
+
+        parameters = {parameter["name"]: parameter for parameter in operation["parameters"]}
+
+        for name in ("office", "make", "model"):
+            with self.subTest(name=name):
+                self.assertEqual(parameters[name]["schema"]["type"], "integer")
+                self.assertFalse(parameters[name].get("required", False))
 
     def test_duplicate_check_parameters_are_required(self):
         operation = self.get_schema()["paths"]["/api/v1/vehicles/duplicate-check/"]["get"]

@@ -11,6 +11,8 @@ from fleet.models import (
     Mechanic,
     Office,
     Vehicle,
+    VehicleMake,
+    VehicleModel,
 )
 
 
@@ -24,13 +26,14 @@ class FleetModelTests(TestCase):
             certification_number="CERT-001",
         )
         cls.maintenance_type = MaintenanceType.objects.create(name="Oil Change")
+        cls.make = VehicleMake.objects.create(name="Ford")
+        cls.vehicle_model = VehicleModel.objects.create(make=cls.make, name="Transit")
 
     def create_vehicle(self, *, vin, license_plate, office=None, active=True):
         return Vehicle.objects.create(
             vin=vin,
             license_plate=license_plate,
-            make="Ford",
-            model="Transit",
+            model=self.vehicle_model,
             year=2022,
             office=office or self.office,
             active=active,
@@ -62,6 +65,49 @@ class FleetModelTests(TestCase):
     def test_duplicate_maintenance_type_name_is_rejected_by_the_database(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
             MaintenanceType.objects.create(name="Oil Change")
+
+    def test_duplicate_vehicle_make_name_is_rejected_by_the_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            VehicleMake.objects.create(name="Ford")
+
+    def test_vehicle_model_belongs_to_one_make(self):
+        f150 = VehicleModel.objects.create(make=self.make, name="F-150")
+
+        self.assertEqual(f150.make, self.make)
+        self.assertEqual(
+            list(self.make.models.order_by("name")),
+            [f150, self.vehicle_model],
+        )
+
+    def test_duplicate_model_name_within_a_make_is_rejected_by_the_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            VehicleModel.objects.create(make=self.make, name="Transit")
+
+    def test_same_model_name_may_exist_under_different_makes(self):
+        other_make = VehicleMake.objects.create(name="Ram")
+
+        other_transit = VehicleModel.objects.create(make=other_make, name="Transit")
+
+        self.assertEqual(
+            VehicleModel.objects.filter(name="Transit").count(),
+            2,
+        )
+        self.assertNotEqual(other_transit.make, self.vehicle_model.make)
+
+    def test_vehicle_references_a_model_and_derives_its_make_from_it(self):
+        vehicle = self.create_vehicle(vin="1FTBR1C80NKA00016", license_plate="AB-9005")
+
+        self.assertEqual(vehicle.model, self.vehicle_model)
+        self.assertEqual(vehicle.model.make, self.make)
+        self.assertEqual(list(self.vehicle_model.vehicles.all()), [vehicle])
+        self.assertNotIn(
+            "make",
+            [field.name for field in Vehicle._meta.get_fields()],
+        )
+
+    def test_duplicate_certification_number_is_rejected_by_the_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Mechanic.objects.create(name="Sam Lee", certification_number="CERT-001")
 
     def test_duplicate_vin_is_rejected_by_the_database(self):
         self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
@@ -167,6 +213,16 @@ class FleetModelTests(TestCase):
         with self.assertRaises(ProtectedError):
             self.maintenance_type.delete()
 
+    def test_vehicle_make_deletion_is_protected_while_a_model_references_it(self):
+        with self.assertRaises(ProtectedError):
+            self.make.delete()
+
+    def test_vehicle_model_deletion_is_protected_while_a_vehicle_references_it(self):
+        self.create_vehicle(vin="1FTBR1C80NKA00017", license_plate="AB-9006")
+
+        with self.assertRaises(ProtectedError):
+            self.vehicle_model.delete()
+
     def test_vehicle_deletion_cascades_to_maintenance_records(self):
         vehicle = self.create_vehicle(
             vin="1FTBR1C80NKA00011",
@@ -205,6 +261,8 @@ class FleetModelTests(TestCase):
         record = self.create_maintenance_record(vehicle=vehicle)
 
         self.assertEqual(str(self.office), "Calgary (Calgary)")
+        self.assertEqual(str(self.make), "Ford")
+        self.assertEqual(str(self.vehicle_model), "Ford Transit")
         self.assertEqual(str(vehicle), "Ford Transit (AB-9002)")
         self.assertEqual(str(self.mechanic), "Alex Rivera (CERT-001)")
         self.assertEqual(str(self.maintenance_type), "Oil Change")

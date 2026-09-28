@@ -5,11 +5,15 @@ from fleet.views import (
     MaintenanceTypeViewSet,
     MechanicViewSet,
     OfficeViewSet,
+    VehicleMakeViewSet,
+    VehicleModelViewSet,
     VehicleViewSet,
 )
 
 router = SimpleRouter()
 router.register("offices", OfficeViewSet)
+router.register("vehicle-makes", VehicleMakeViewSet)
+router.register("vehicle-models", VehicleModelViewSet)
 router.register("vehicles", VehicleViewSet)
 router.register("mechanics", MechanicViewSet)
 router.register("maintenance-types", MaintenanceTypeViewSet)

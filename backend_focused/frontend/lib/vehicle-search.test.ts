@@ -10,7 +10,7 @@ describe('parseVehicleSearch', () => {
   it('reads the filters and the page from the URL', () => {
     const search = parseVehicleSearch(
       new URLSearchParams(
-        'office=2&active=true&make=Ford&model=Transit&maintained_from=2026-01-01' +
+        'office=2&active=true&make=1&model=3&maintained_from=2026-01-01' +
           '&maintained_to=2026-06-30&mechanic_certification=CERT-1&page=3',
       ),
     );
@@ -19,8 +19,8 @@ describe('parseVehicleSearch', () => {
       filters: {
         office: '2',
         active: 'true',
-        make: 'Ford',
-        model: 'Transit',
+        make: '1',
+        model: '3',
         maintained_from: '2026-01-01',
         maintained_to: '2026-06-30',
         mechanic_certification: 'CERT-1',
@@ -51,11 +51,23 @@ describe('parseVehicleSearch', () => {
 describe('toSearchParams', () => {
   it('keeps only non-empty trimmed filters in a stable order', () => {
     const params = toSearchParams({
-      filters: { ...EMPTY_FILTERS, model: ' Corolla ', office: '1', make: '   ' },
+      filters: { ...EMPTY_FILTERS, model: ' 3 ', office: '1', make: '   ' },
       page: 1,
     });
 
-    expect(params.toString()).toBe('office=1&model=Corolla');
+    expect(params.toString()).toBe('office=1&model=3');
+  });
+
+  it('serializes make and model as ids', () => {
+    expect(
+      toSearchParams({ filters: { ...EMPTY_FILTERS, make: '1', model: '3' }, page: 1 }).toString(),
+    ).toBe('make=1&model=3');
+    expect(toSearchParams({ filters: { ...EMPTY_FILTERS, make: '1' }, page: 1 }).toString()).toBe(
+      'make=1',
+    );
+    expect(toSearchParams({ filters: { ...EMPTY_FILTERS, model: '3' }, page: 1 }).toString()).toBe(
+      'model=3',
+    );
   });
 
   it('adds the page only after page 1', () => {
@@ -67,7 +79,13 @@ describe('toSearchParams', () => {
 
   it('round-trips through the URL', () => {
     const search = {
-      filters: { ...EMPTY_FILTERS, office: '3', maintained_from: '2026-01-01' },
+      filters: {
+        ...EMPTY_FILTERS,
+        office: '3',
+        make: '1',
+        model: '3',
+        maintained_from: '2026-01-01',
+      },
       page: 4,
     };
 

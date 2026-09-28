@@ -155,7 +155,7 @@ Validation errors should include meaningful messages.
 ## Project Structure
 
 - `backend/`: Django + DRF API (`fleet` app).
-- `frontend/`: Empty Next.js app.
+- `frontend/`: Next.js 16 + React 19 client for the API (Material UI, axios, React Query).
 
 ## Getting Started
 
@@ -257,9 +257,9 @@ All Fleet API endpoints are under `/api/v1/` and return JSON. Lists are paginate
 
 | Requirement | Endpoint |
 |---|---|
-| CRUD | `offices/`, `vehicles/`, `mechanics/`, `maintenance-types/`, `maintenance-records/` (`GET`/`POST` on the collection, `GET`/`PUT`/`PATCH`/`DELETE` on `{id}/`) |
+| CRUD | `offices/`, `vehicle-makes/`, `vehicle-models/`, `vehicles/`, `mechanics/`, `maintenance-types/`, `maintenance-records/` (`GET`/`POST` on the collection, `GET`/`PUT`/`PATCH`/`DELETE` on `{id}/`) |
 | Office summary | `GET offices/summary/` (plain list) |
-| Vehicle search | `GET vehicles/?office=&active=&make=&model=&maintained_from=&maintained_to=&mechanic_certification=` |
+| Vehicle search | `GET vehicles/?office=&active=&make=&model=&maintained_from=&maintained_to=&mechanic_certification=` (`office`, `make` and `model` are ids) |
 | Vehicle details | `GET vehicles/{id}/` (office + full history + mechanic) |
 | Maintenance history | `GET vehicles/{id}/maintenance-records/` (newest first) |
 | Assign vehicle | `PUT vehicles/{id}/office/` with `{"office_id": 2}` |
@@ -267,14 +267,65 @@ All Fleet API endpoints are under `/api/v1/` and return JSON. Lists are paginate
 | Vehicles needing maintenance | `GET vehicles/maintenance-due/` |
 | Duplicate vehicle check | `GET vehicles/duplicate-check/?vin=&license_plate=` |
 
-Relations are nested objects on read and `*_id` fields on write (`office_id`, `vehicle_id`, `mechanic_id`, `type_id`).
+Relations are nested objects on read and `*_id` fields on write (`office_id`, `model_id`,
+`make_id`, `vehicle_id`, `mechanic_id`, `type_id`).
 
-Errors: `400` with field messages, `401` without a token, `404` for unknown ids, and `409` when you delete an office, mechanic or maintenance type that other records still reference.
+Errors: `400` with field messages, `401` without a token, `404` for unknown ids, and `409` when you
+delete an office, vehicle make, vehicle model, mechanic or maintenance type that other records
+still reference.
+
+### Vehicle makes and models
+
+Makes and models are canonical reference data, managed through their own endpoints:
+
+- `vehicle-makes/`: `{"id": 2, "name": "Ford"}`. Make names are unique.
+- `vehicle-models/`: reads `{"id": 2, "name": "Transit", "make": {"id": 2, "name": "Ford"}}`,
+  writes `{"name": "Transit", "make_id": 2}`. Model names are unique within a make, so two makes
+  can each have a model with the same name.
+
+A vehicle stores only its model (`model_id`). Its make is always `model.make` and is never stored
+on the vehicle, so a vehicle cannot end up with a make that does not match its model.
+
+Vehicle reads show both as objects (ids below are from a fresh `seed_fleet`):
+
+```json
+{
+  "id": 2,
+  "vin": "1FTBR1C80NKA10002",
+  "license_plate": "FLT-RECENT",
+  "make": {"id": 2, "name": "Ford"},
+  "model": {"id": 2, "name": "Transit"},
+  "year": 2022,
+  "active": true,
+  "office": {"id": 1, "name": "Calgary Operations", "city": "Calgary"}
+}
+```
+
+Vehicle writes send `model_id` only. Make or model names are not accepted, and neither is
+`make_id`, because the model already decides the make:
+
+```json
+{
+  "vin": "1FTBR1C80NKA10002",
+  "license_plate": "FLT-RECENT",
+  "model_id": 2,
+  "year": 2022,
+  "office_id": 1,
+  "active": true
+}
+```
+
+Search takes ids for `make` and `model` (`?make=2`, `?model=2`, `?make=2&model=2`). Either can be
+sent alone. An unknown id is a `400`, and so is a model that does not belong to the given make
+(`?make=1&model=2` returns `{"model": ["Model 2 does not belong to make 1."]}`), instead of a silent empty result. Make and
+model are never matched by name.
 
 ### Seed data
 
 `seed_fleet` creates a small, deterministic dataset where each record covers one scenario:
-3 offices, 5 vehicles, 3 mechanics (one inactive), 4 maintenance types and 3 maintenance records.
+3 offices, 3 vehicle makes with 4 models (Ram ProMaster, Ford Transit, Ford F-150, Chevrolet
+Express), 5 vehicles, 3 mechanics (one inactive), 4 maintenance types and 3 maintenance records.
+Makes and models are created first, and vehicles point to their model.
 It includes a vehicle that was never maintained, one with recent maintenance from two mechanics,
 one whose last maintenance was more than 365 days ago, and one active and one inactive vehicle
 sharing a license plate. Dates are relative to today. Reruns update the seeded fixtures in place
@@ -284,6 +335,10 @@ and preserve unrelated data, including manually added maintenance records.
 
 - JWT (the optional bonus) protects every application endpoint.
 - Maintenance type is its own resource with CRUD, so type names stay consistent.
+- Vehicle makes and models are canonical catalogs for the same reason. A vehicle references a
+  model, and the make comes from the model. City, year and other scalar fields stay plain values.
+- Certification numbers are treated as unique mechanic identifiers. The database enforces it and
+  the API returns a `400` for a duplicate.
 - Maintenance cost must be `>= 0`; zero is allowed.
 - Office summary: "last 12 months" goes from the same calendar date one year ago to today,
   inclusive (Feb 29 maps to Feb 28). All maintenance on a vehicle counts toward its *current*
@@ -292,9 +347,10 @@ and preserve unrelated data, including manually added maintenance records.
 - Mechanic workload: "current year" means Jan 1 to today.
 - Reports and maintenance-due ignore records dated after today. Exactly 365 days ago is not due
   yet, and never-maintained vehicles come first.
-- Search: `make`/`model` match the whole value, ignoring case. The date range and certification
-  must match the same maintenance record. Empty parameters are ignored. An unknown `office`
-  returns 400.
+- Search: `office`, `make` and `model` are ids, and an unknown id returns 400. A `make` and `model`
+  pair that does not match also returns 400. `mechanic_certification` is an exact match, so an
+  unknown certification returns no vehicles. The date range and certification must match the
+  same maintenance record. Empty parameters are ignored.
 - Duplicate check: a VIN conflicts with any vehicle, a plate only with active vehicles. HTTP inputs
   are trimmed by DRF, then compared case-sensitively against stored values.
 - Dates use the server time zone (UTC).
@@ -306,9 +362,13 @@ and preserve unrelated data, including manually added maintenance records.
 - The active-plate rule is a partial unique constraint in the database, plus a serializer check
   for a clear 400 message. Two concurrent requests can both pass validation, and then the database
   rejects the second with a 500. This race is not translated on purpose.
-- Vehicle details return the full history in two queries (vehicle + one prefetch with mechanic and
-  type), whatever the number of records. The history endpoint is paginated for clients that want
-  pages.
+- Every vehicle read joins `office` and `model__make` (`select_related`), so lists, details,
+  write responses and maintenance-due do not add a query per row. Maintenance record reads join
+  `vehicle__model__make`, `mechanic` and `type`, and vehicle model reads join `make`. Tests pin
+  these query counts.
+- Vehicle details return the full history in two queries (vehicle joined with office, model and
+  make + one prefetch with mechanic and type), whatever the number of records. The history
+  endpoint is paginated for clients that want pages.
 - Search runs its maintenance filters as a single `EXISTS` subquery, so there are no duplicate
   rows and no `distinct()`. Office summary and workload are one aggregate query each.
   Maintenance-due reads each vehicle's latest record with a correlated subquery.
@@ -319,15 +379,21 @@ and preserve unrelated data, including manually added maintenance records.
   Other collections are paginated.
 - Deleting a vehicle deletes its maintenance history. Set `active=false` to retire a vehicle
   instead.
+- Search filters make through the model (`model__make`) and model by id. Checking that a model
+  belongs to the make costs no extra query, since the model row already has `make_id`. Each id
+  parameter costs one validation query.
+- The fleet schema has a single `0001_initial` migration. The app was never deployed, so the
+  make/model normalization rebuilt the schema instead of adding data migrations.
 - The seed is small and scenario-focused instead of large random data (no Faker), so it is
   deterministic and easy to check by hand.
 
 ### Left out on purpose (production concerns)
 
 PostgreSQL and deployment, secrets and settings from the environment (`SECRET_KEY`, `DEBUG`,
-`ALLOWED_HOSTS`, CORS, which currently allows all origins), JWT lifetime/rotation tuning, rate
-limiting, monitoring, turning concurrent unique-constraint errors into 400s, stronger input
-normalization, and office assignment history.
+`ALLOWED_HOSTS`, CORS, which currently allows all origins), refresh token rotation and
+blacklisting (token lifetimes are set: 1 hour for access, 1 day for refresh), rate limiting,
+monitoring, turning concurrent unique-constraint errors into 400s, stronger input normalization,
+and office assignment history.
 
 ## Frontend Implementation Notes
 
@@ -336,22 +402,27 @@ normalization, and office assignment history.
 | Screen | Endpoints |
 |---|---|
 | Login | `POST auth/token/`, `POST auth/token/refresh/` |
-| Vehicles: search, filters and pagination in the URL | `GET vehicles/?...`, `GET offices/` |
+| Vehicles: search, filters and pagination in the URL | `GET vehicles/?...`, `GET offices/`, `GET vehicle-makes/`, `GET vehicle-models/` |
 | Vehicle details with the full maintenance history, delete | `GET vehicles/{id}/`, `DELETE vehicles/{id}/` |
 | Add maintenance (dialog on the vehicle page) | `POST maintenance-records/`, `GET mechanics/`, `GET maintenance-types/` |
-| New / edit vehicle | `POST vehicles/`, `PUT vehicles/{id}/` |
+| New / edit vehicle | `POST vehicles/`, `PUT vehicles/{id}/`, `GET offices/`, `GET vehicle-makes/`, `GET vehicle-models/` |
 | Maintenance due (the extra endpoint) | `GET vehicles/maintenance-due/` |
 
 ### Assumptions
 
-- Vehicles are the main entity, so they get the full CRUD UI. Offices are read-only and only feed
-  the filter and the form. Maintenance records can be added from the vehicle page; editing or
+- Vehicles are the main entity, so they get the full CRUD UI. Offices, vehicle makes and vehicle
+  models are read-only and only feed the filters and the form. They are managed in the API. Maintenance records can be added from the vehicle page; editing or
   deleting them, and managing mechanics and maintenance types, is done in the API (Swagger).
 - The maintenance form lists inactive mechanics too (marked "inactive"), because the API accepts
   them and past work may need to be recorded. The date starts as today.
-- Filters apply when the user clicks Search, not on every keystroke, because `make` and `model`
-  match the whole value. Each search is a new URL, so links can be shared and browser back and
-  forward restore earlier searches.
+- Filters apply when the user clicks Search, not on every change. Each search is a new URL, so
+  links can be shared and browser back and forward restore earlier searches.
+- Make and model are selects backed by the catalogs, and the URL holds their ids
+  (`/vehicles?make=2&model=2`). With a make chosen, the model list shows only its models. With no
+  make, it shows every model with its make (`Ford · Transit`). Changing the make clears a model
+  of another make. An unknown or mismatched id from the URL stays visible in the select, next to
+  the API's 400 message.
+- The vehicle form picks the make first, then one of its models, and sends only `model_id`.
 - The vehicle page shows the complete history from the details endpoint, without pagination.
 - Deleting a vehicle also deletes its history. The confirm dialog says so and suggests marking
   the vehicle inactive instead.
@@ -369,5 +440,6 @@ normalization, and office assignment history.
   an XSS bug would leak them. In production I would use httpOnly cookies set by the server. A 401
   triggers one shared refresh and one retry. If the refresh fails, or the retried request gets a
   401 again, the tokens are cleared and the user goes back to login.
-- Tests cover the logic that can break quietly: search params in the URL, API error parsing,
-  token refresh, the vehicle form and the maintenance form. There are no page or E2E tests.
+- Tests cover the logic that can break quietly: search params in the URL, the search filters
+  (dependent make/model selects, Clear), API error parsing, token refresh, the vehicle form and
+  the maintenance form. There are no page or E2E tests.
