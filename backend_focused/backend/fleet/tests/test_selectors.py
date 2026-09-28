@@ -4,7 +4,15 @@ from decimal import Decimal
 from django.test import SimpleTestCase, TestCase
 
 from fleet import selectors
-from fleet.models import MaintenanceRecord, MaintenanceType, Mechanic, Office, Vehicle
+from fleet.models import (
+    MaintenanceRecord,
+    MaintenanceType,
+    Mechanic,
+    Office,
+    Vehicle,
+    VehicleMake,
+    VehicleModel,
+)
 
 TODAY = date(2026, 9, 26)
 
@@ -18,6 +26,8 @@ class SelectorTestCase(TestCase):
             certification_number="CERT-001",
         )
         cls.maintenance_type = MaintenanceType.objects.create(name="Oil Change")
+        cls.ford = VehicleMake.objects.create(name="Ford")
+        cls.transit = VehicleModel.objects.create(make=cls.ford, name="Transit")
 
     def create_vehicle(
         self,
@@ -26,14 +36,12 @@ class SelectorTestCase(TestCase):
         vin=None,
         office=None,
         active=True,
-        make="Ford",
-        model="Transit",
+        model=None,
     ):
         return Vehicle.objects.create(
             vin=vin or f"VIN-{license_plate}",
             license_plate=license_plate,
-            make=make,
-            model=model,
+            model=model or self.transit,
             year=2022,
             office=office or self.office,
             active=active,
@@ -202,13 +210,26 @@ class FilterVehiclesTests(SelectorTestCase):
         self.assertEqual(self.search(active=False), [calgary_inactive])
         self.assertEqual(self.search(office=self.office, active=True), [calgary_active])
 
-    def test_make_and_model_match_exactly_ignoring_case(self):
-        transit = self.create_vehicle("AB-1001", make="Ford", model="Transit")
-        self.create_vehicle("AB-1002", make="Ford", model="Transit Connect")
-        self.create_vehicle("AB-1003", make="Ram", model="ProMaster")
+    def test_make_matches_through_the_vehicle_model(self):
+        ram = VehicleMake.objects.create(name="Ram")
+        connect = VehicleModel.objects.create(make=self.ford, name="Transit Connect")
+        ram_transit = VehicleModel.objects.create(make=ram, name="Transit")
+        transit = self.create_vehicle("AB-1001")
+        transit_connect = self.create_vehicle("AB-1002", model=connect)
+        other_make = self.create_vehicle("AB-1003", model=ram_transit)
 
-        self.assertEqual(self.search(make="ford", model="TRANSIT"), [transit])
-        self.assertEqual(self.search(make="For"), [])
+        self.assertEqual(self.search(make=self.ford), [transit, transit_connect])
+        self.assertEqual(self.search(make=ram), [other_make])
+
+    def test_model_matches_the_model_row_not_its_name(self):
+        ram = VehicleMake.objects.create(name="Ram")
+        ram_transit = VehicleModel.objects.create(make=ram, name="Transit")
+        transit = self.create_vehicle("AB-1001")
+        self.create_vehicle("AB-1002", model=ram_transit)
+
+        self.assertEqual(self.search(model=self.transit), [transit])
+        self.assertEqual(self.search(make=self.ford, model=self.transit), [transit])
+        self.assertEqual(self.search(make=ram, model=self.transit), [])
 
     def test_maintenance_dates_are_inclusive(self):
         self.create_vehicle("AB-1000")  # never maintained, never matches
@@ -275,6 +296,18 @@ class FilterVehiclesTests(SelectorTestCase):
 class VehiclesNeedingMaintenanceTests(SelectorTestCase):
     def due(self, today=TODAY):
         return list(selectors.vehicles_needing_maintenance(today=today))
+
+    def test_loads_office_model_and_make_with_the_vehicles(self):
+        self.create_vehicle("AB-1001")
+        self.create_vehicle("AB-1002")
+
+        with self.assertNumQueries(1):
+            rows = [
+                (vehicle.office.name, vehicle.model.name, vehicle.model.make.name)
+                for vehicle in self.due()
+            ]
+
+        self.assertEqual(rows, [("Calgary", "Transit", "Ford")] * 2)
 
     def test_never_maintained_active_vehicle_is_due(self):
         vehicle = self.create_vehicle("AB-1001")

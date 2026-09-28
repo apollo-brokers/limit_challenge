@@ -14,23 +14,37 @@ export type Office = {
   city: string;
 };
 
+export type VehicleMake = {
+  id: number;
+  name: string;
+};
+
+export type VehicleModel = {
+  id: number;
+  name: string;
+  make: VehicleMake;
+};
+
+/** A vehicle model inside a vehicle read, where the make is a sibling field. */
+export type VehicleModelSummary = Omit<VehicleModel, 'make'>;
+
 export type Vehicle = {
   id: number;
   vin: string;
   license_plate: string;
-  make: string;
-  model: string;
+  /** Always the make of `model`, derived by the API. */
+  make: VehicleMake;
+  model: VehicleModelSummary;
   year: number;
   active: boolean;
   office: Office;
 };
 
-/** Body for vehicle create and full update. Relations are sent as ids. */
+/** Body for vehicle create and full update. Relations are sent as ids; the model sets the make. */
 export type VehicleWrite = {
   vin: string;
   license_plate: string;
-  make: string;
-  model: string;
+  model_id: number | null;
   year: number | null;
   active: boolean;
   office_id: number | null;

@@ -17,6 +17,8 @@ from fleet.models import (
     Mechanic,
     Office,
     Vehicle,
+    VehicleMake,
+    VehicleModel,
 )
 from fleet.serializers import (
     MaintenanceRecordSerializer,
@@ -29,6 +31,8 @@ from fleet.serializers import (
     VehicleDuplicateCheckParamsSerializer,
     VehicleMaintenanceDueSerializer,
     VehicleMaintenanceRecordSerializer,
+    VehicleMakeSerializer,
+    VehicleModelSerializer,
     VehicleOfficeAssignmentSerializer,
     VehicleSearchParamsSerializer,
     VehicleSerializer,
@@ -67,24 +71,45 @@ class OfficeViewSet(viewsets.ModelViewSet):
         return Response(OfficeSummarySerializer(offices, many=True).data)
 
 
+@protected_destroy_schema
+class VehicleMakeViewSet(viewsets.ModelViewSet):
+    queryset = VehicleMake.objects.order_by("name", "id")
+    serializer_class = VehicleMakeSerializer
+
+
+@protected_destroy_schema
+class VehicleModelViewSet(viewsets.ModelViewSet):
+    queryset = VehicleModel.objects.select_related("make").order_by(
+        "make__name",
+        "name",
+        "id",
+    )
+    serializer_class = VehicleModelSerializer
+
+
 @extend_schema_view(
     list=extend_schema(
         parameters=[VehicleSearchParamsSerializer],
         responses={
             200: VehicleSerializer(many=True),
-            400: OpenApiResponse(description="Invalid search parameters."),
+            400: OpenApiResponse(
+                description=(
+                    "Invalid search parameters, unknown office, make or model ids, or a model "
+                    "that does not belong to the given make."
+                ),
+            ),
         },
     ),
 )
 class VehicleViewSet(viewsets.ModelViewSet):
-    queryset = Vehicle.objects.select_related("office").order_by("id")
+    queryset = Vehicle.objects.select_related("office", "model__make").order_by("id")
     serializer_class = VehicleSerializer
 
     def list(self, request, *args, **kwargs):
         """List vehicles filtered by any combination of the search parameters.
 
-        The maintenance date range and mechanic certification must match the same maintenance
-        record.
+        ``make`` and ``model`` are ids. The maintenance date range and mechanic certification
+        must match the same maintenance record.
         """
         params = VehicleSearchParamsSerializer(data=request.query_params)
         params.is_valid(raise_exception=True)
@@ -216,7 +241,7 @@ class MaintenanceTypeViewSet(viewsets.ModelViewSet):
 
 class MaintenanceRecordViewSet(viewsets.ModelViewSet):
     queryset = MaintenanceRecord.objects.select_related(
-        "vehicle",
+        "vehicle__model__make",
         "mechanic",
         "type",
     )

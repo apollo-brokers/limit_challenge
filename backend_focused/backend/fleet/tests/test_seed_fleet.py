@@ -13,6 +13,8 @@ from fleet.models import (
     Mechanic,
     Office,
     Vehicle,
+    VehicleMake,
+    VehicleModel,
 )
 
 
@@ -32,10 +34,31 @@ class SeedFleetCommandTests(TestCase):
         output = self.run_seed()
 
         self.assertEqual(Office.objects.count(), 3)
+        self.assertEqual(VehicleMake.objects.count(), 3)
+        self.assertEqual(VehicleModel.objects.count(), 4)
         self.assertEqual(Vehicle.objects.count(), 5)
         self.assertEqual(Mechanic.objects.count(), 3)
         self.assertEqual(MaintenanceType.objects.count(), 4)
         self.assertEqual(MaintenanceRecord.objects.count(), 3)
+        self.assertEqual(
+            set(VehicleModel.objects.values_list("make__name", "name")),
+            {
+                ("Ram", "ProMaster"),
+                ("Ford", "Transit"),
+                ("Ford", "F-150"),
+                ("Chevrolet", "Express"),
+            },
+        )
+        self.assertEqual(
+            dict(Vehicle.objects.values_list("vin", "model__name")),
+            {
+                "1FTBR1C80NKA10001": "ProMaster",
+                "1FTBR1C80NKA10002": "Transit",
+                "1FTBR1C80NKA10003": "Express",
+                "1FTBR1C80NKA10004": "F-150",
+                "1FTBR1C80NKA10005": "F-150",
+            },
+        )
         self.assertEqual(
             set(MaintenanceType.objects.values_list("name", flat=True)),
             {"Oil Change", "Tire Rotation", "Brake Service", "Inspection"},
@@ -81,13 +104,15 @@ class SeedFleetCommandTests(TestCase):
         self.assertEqual(reused_plate_vehicles.filter(active=False).count(), 1)
         self.assertEqual(
             output,
-            "Fleet seed data ready: 3 offices, 5 vehicles, "
-            "3 mechanics, 4 maintenance types, 3 maintenance records.\n",
+            "Fleet seed data ready: 3 offices, 3 vehicle makes, 4 vehicle models, "
+            "5 vehicles, 3 mechanics, 4 maintenance types, 3 maintenance records.\n",
         )
 
     def test_seed_fleet_is_rerunnable_without_duplicating_its_fixture(self):
         self.run_seed()
         office_ids = set(Office.objects.values_list("pk", flat=True))
+        make_ids = set(VehicleMake.objects.values_list("pk", flat=True))
+        model_ids = set(VehicleModel.objects.values_list("pk", flat=True))
         vehicle_ids = set(Vehicle.objects.values_list("pk", flat=True))
         mechanic_ids = set(Mechanic.objects.values_list("pk", flat=True))
         maintenance_type_ids = set(
@@ -98,6 +123,8 @@ class SeedFleetCommandTests(TestCase):
         self.run_seed(self.today + timedelta(days=1))
 
         self.assertEqual(Office.objects.count(), 3)
+        self.assertEqual(VehicleMake.objects.count(), 3)
+        self.assertEqual(VehicleModel.objects.count(), 4)
         self.assertEqual(Vehicle.objects.count(), 5)
         self.assertEqual(Mechanic.objects.count(), 3)
         self.assertEqual(MaintenanceType.objects.count(), 4)
@@ -105,6 +132,14 @@ class SeedFleetCommandTests(TestCase):
         self.assertEqual(
             set(Office.objects.values_list("pk", flat=True)),
             office_ids,
+        )
+        self.assertEqual(
+            set(VehicleMake.objects.values_list("pk", flat=True)),
+            make_ids,
+        )
+        self.assertEqual(
+            set(VehicleModel.objects.values_list("pk", flat=True)),
+            model_ids,
         )
         self.assertEqual(
             set(Vehicle.objects.values_list("pk", flat=True)),
@@ -146,6 +181,20 @@ class SeedFleetCommandTests(TestCase):
         self.assertEqual(mechanic.pk, mechanic_id)
         self.assertEqual(mechanic.name, "Jordan Lee")
         self.assertTrue(mechanic.active)
+
+    def test_seed_fleet_restores_the_model_of_seeded_vehicles(self):
+        self.run_seed()
+        vehicle = Vehicle.objects.get(vin="1FTBR1C80NKA10002")
+        vehicle.model = VehicleModel.objects.get(name="Express")
+        vehicle.save(update_fields=("model",))
+
+        self.run_seed()
+
+        vehicle.refresh_from_db()
+        self.assertEqual(
+            (vehicle.model.make.name, vehicle.model.name),
+            ("Ford", "Transit"),
+        )
 
     def test_seed_fleet_preserves_unrelated_records_on_seeded_vehicles(self):
         self.run_seed()

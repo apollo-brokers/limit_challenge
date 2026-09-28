@@ -98,7 +98,8 @@ def filter_vehicles(
 ):
     """Apply the vehicle search filters; ``None`` means the filter was not sent.
 
-    ``make`` and ``model`` match the whole value, ignoring case. The maintenance filters
+    ``office``, ``make`` and ``model`` are model instances. The make is read through the vehicle
+    model, since a vehicle stores only its model. The maintenance filters
     (inclusive date bounds and mechanic certification) must all match the same record, so one
     correlated ``EXISTS`` is used. A join would need ``distinct()`` to avoid one row per
     matching record, and separate joins would let different records satisfy each filter.
@@ -108,9 +109,9 @@ def filter_vehicles(
     if active is not None:
         queryset = queryset.filter(active=active)
     if make is not None:
-        queryset = queryset.filter(make__iexact=make)
+        queryset = queryset.filter(model__make=make)
     if model is not None:
-        queryset = queryset.filter(model__iexact=model)
+        queryset = queryset.filter(model=model)
 
     if (
         maintained_from is not None
@@ -146,7 +147,7 @@ def vehicles_needing_maintenance(*, today):
     due_before = today - timedelta(days=MAINTENANCE_DUE_AFTER_DAYS)
     return (
         Vehicle.objects.filter(active=True)
-        .select_related("office")
+        .select_related("office", "model__make")
         .annotate(last_maintenance=Subquery(last_performed_on))
         .filter(Q(last_maintenance__isnull=True) | Q(last_maintenance__lt=due_before))
         .order_by(F("last_maintenance").asc(nulls_first=True), "id")

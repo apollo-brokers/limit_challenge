@@ -9,7 +9,7 @@ import { EmptyState, ErrorAlert, PageSpinner } from '@/components/query-state';
 import { useNotify } from '@/app/providers';
 import { apiClient } from '@/lib/api-client';
 import { getErrorStatus } from '@/lib/api-errors';
-import { useOffices } from '@/lib/lookups';
+import { useOffices, useVehicleMakes, useVehicleModels } from '@/lib/lookups';
 import type { Vehicle, VehicleDetail, VehicleWrite } from '@/lib/types';
 import VehicleForm from '../../vehicle-form';
 
@@ -19,6 +19,8 @@ export default function EditVehiclePage() {
   const queryClient = useQueryClient();
   const notify = useNotify();
   const offices = useOffices();
+  const makes = useVehicleMakes();
+  const models = useVehicleModels();
 
   const vehicle = useQuery({
     queryKey: ['vehicles', 'detail', id],
@@ -50,7 +52,7 @@ export default function EditVehiclePage() {
     );
   }
 
-  const loadError = vehicle.error ?? offices.error;
+  const loadError = vehicle.error ?? offices.error ?? makes.error ?? models.error;
 
   return (
     <>
@@ -64,12 +66,16 @@ export default function EditVehiclePage() {
           onRetry={() => {
             vehicle.refetch();
             offices.refetch();
+            makes.refetch();
+            models.refetch();
           }}
         />
-      ) : vehicle.data && offices.data ? (
+      ) : vehicle.data && offices.data && makes.data && models.data ? (
         <VehicleForm
           initial={vehicle.data}
           offices={offices.data}
+          makes={makes.data}
+          models={models.data}
           submitLabel="Save changes"
           isPending={update.isPending}
           error={update.error}

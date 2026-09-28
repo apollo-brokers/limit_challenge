@@ -11,10 +11,14 @@ from fleet.models import (
     Mechanic,
     Office,
     Vehicle,
+    VehicleMake,
+    VehicleModel,
 )
 
 RESOURCE_URLS = (
     "/api/v1/offices/",
+    "/api/v1/vehicle-makes/",
+    "/api/v1/vehicle-models/",
     "/api/v1/vehicles/",
     "/api/v1/mechanics/",
     "/api/v1/maintenance-types/",
@@ -36,16 +40,17 @@ class FleetApiTestCase(APITestCase):
             certification_number="CERT-001",
         )
         cls.maintenance_type = MaintenanceType.objects.create(name="Oil Change")
+        cls.ford = VehicleMake.objects.create(name="Ford")
+        cls.transit = VehicleModel.objects.create(make=cls.ford, name="Transit")
 
     def setUp(self):
         self.client.force_authenticate(self.user)
 
-    def create_vehicle(self, *, vin, license_plate, office=None, active=True):
+    def create_vehicle(self, *, vin, license_plate, office=None, active=True, model=None):
         return Vehicle.objects.create(
             vin=vin,
             license_plate=license_plate,
-            make="Ford",
-            model="Transit",
+            model=model or self.transit,
             year=2022,
             office=office or self.office,
             active=active,
@@ -129,6 +134,8 @@ class CrudSchemaTests(APITestCase):
 
         for url in (
             "/api/v1/offices/{id}/",
+            "/api/v1/vehicle-makes/{id}/",
+            "/api/v1/vehicle-models/{id}/",
             "/api/v1/mechanics/{id}/",
             "/api/v1/maintenance-types/{id}/",
         ):
@@ -142,6 +149,28 @@ class CrudSchemaTests(APITestCase):
         self.assertNotIn("office_id", schemas["Vehicle"]["properties"])
         self.assertIn("office_id", schemas["VehicleRequest"]["properties"])
         self.assertNotIn("office", schemas["VehicleRequest"]["properties"])
+        self.assertEqual(
+            set(schemas["Vehicle"]["properties"]),
+            {"id", "vin", "license_plate", "make", "model", "year", "active", "office"},
+        )
+        self.assertEqual(
+            set(schemas["VehicleRequest"]["properties"]),
+            {"vin", "license_plate", "model_id", "year", "active", "office_id"},
+        )
+        self.assertIn("model_id", schemas["VehicleRequest"]["required"])
+        self.assertEqual(
+            schemas["VehicleRequest"]["properties"]["model_id"]["type"],
+            "integer",
+        )
+        self.assertEqual(set(schemas["VehicleMake"]["properties"]), {"id", "name"})
+        self.assertEqual(
+            set(schemas["VehicleModel"]["properties"]),
+            {"id", "name", "make"},
+        )
+        self.assertEqual(
+            set(schemas["VehicleModelRequest"]["properties"]),
+            {"name", "make_id"},
+        )
         self.assertEqual(
             set(schemas["MaintenanceRecordRequest"]["required"]),
             {"vehicle_id", "mechanic_id", "type_id", "performed_on", "cost"},
@@ -216,8 +245,7 @@ class VehicleApiTests(FleetApiTestCase):
         payload = {
             "vin": "1FTBR1C80NKA09999",
             "license_plate": "ZZ-9999",
-            "make": "Ford",
-            "model": "Transit",
+            "model_id": self.transit.pk,
             "year": 2023,
             "active": True,
             "office_id": self.office.pk,
@@ -250,8 +278,8 @@ class VehicleApiTests(FleetApiTestCase):
                 "id": vehicle.pk,
                 "vin": "1FTBR1C80NKA00001",
                 "license_plate": "AB-1001",
-                "make": "Ford",
-                "model": "Transit",
+                "make": {"id": self.ford.pk, "name": "Ford"},
+                "model": {"id": self.transit.pk, "name": "Transit"},
                 "year": 2022,
                 "active": True,
                 "office": {"id": self.office.pk, "name": "Calgary", "city": "Calgary"},
@@ -259,7 +287,7 @@ class VehicleApiTests(FleetApiTestCase):
             },
         )
 
-    def test_create_vehicle_with_office_id(self):
+    def test_create_vehicle_with_office_id_and_model_id(self):
         response = self.client.post(
             "/api/v1/vehicles/",
             self.vehicle_payload(),
@@ -268,8 +296,75 @@ class VehicleApiTests(FleetApiTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["office"]["id"], self.office.pk)
+        self.assertEqual(response.data["make"], {"id": self.ford.pk, "name": "Ford"})
+        self.assertEqual(response.data["model"], {"id": self.transit.pk, "name": "Transit"})
         self.assertNotIn("office_id", response.data)
-        self.assertEqual(Vehicle.objects.get(pk=response.data["id"]).office, self.office)
+        self.assertNotIn("model_id", response.data)
+        vehicle = Vehicle.objects.get(pk=response.data["id"])
+        self.assertEqual(vehicle.office, self.office)
+        self.assertEqual(vehicle.model, self.transit)
+
+    def test_create_vehicle_does_not_accept_make_or_model_names(self):
+        payload = self.vehicle_payload(make="Ford", model="Transit")
+        del payload["model_id"]
+
+        response = self.client.post("/api/v1/vehicles/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data,
+            {
+                "model_id": ["This field is required."],
+                "make": ["Make is read-only and is derived from model_id."],
+                "model": ["Use model_id to set the vehicle model."],
+            },
+        )
+        self.assertFalse(Vehicle.objects.exists())
+
+    def test_make_id_is_rejected_because_the_model_decides_the_make(self):
+        ram = VehicleMake.objects.create(name="Ram")
+
+        response = self.client.post(
+            "/api/v1/vehicles/",
+            self.vehicle_payload(make_id=ram.pk),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data,
+            {"make_id": ["Make is derived from model_id and cannot be set directly."]},
+        )
+        self.assertFalse(Vehicle.objects.exists())
+
+    def test_put_with_make_or_model_input_is_rejected(self):
+        vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
+
+        for extra in ({"make": "Ford"}, {"model": "Transit"}, {"make_id": self.ford.pk}):
+            with self.subTest(extra=extra):
+                response = self.client.put(
+                    f"/api/v1/vehicles/{vehicle.pk}/",
+                    self.vehicle_payload(vin=vehicle.vin, license_plate="AB-2002", **extra),
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(set(response.data), set(extra))
+
+        vehicle.refresh_from_db()
+        self.assertEqual(vehicle.license_plate, "AB-1001")
+
+    def test_invalid_model_id_is_rejected(self):
+        for model_id in (999999, "abc", None):
+            with self.subTest(model_id=model_id):
+                response = self.client.post(
+                    "/api/v1/vehicles/",
+                    self.vehicle_payload(model_id=model_id),
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("model_id", response.data)
 
     def test_put_vehicle(self):
         vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
@@ -289,18 +384,66 @@ class VehicleApiTests(FleetApiTestCase):
         self.assertEqual(vehicle.license_plate, "AB-2002")
         self.assertEqual(vehicle.office, self.other_office)
 
-    def test_patch_vehicle(self):
+    def test_put_vehicle_changes_model_and_derived_make(self):
         vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
+        ram = VehicleMake.objects.create(name="Ram")
+        promaster = VehicleModel.objects.create(make=ram, name="ProMaster")
 
-        response = self.client.patch(
+        response = self.client.put(
             f"/api/v1/vehicles/{vehicle.pk}/",
-            {"model": "E-Transit"},
+            self.vehicle_payload(vin=vehicle.vin, model_id=promaster.pk),
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["make"], {"id": ram.pk, "name": "Ram"})
+        self.assertEqual(response.data["model"], {"id": promaster.pk, "name": "ProMaster"})
         vehicle.refresh_from_db()
-        self.assertEqual(vehicle.model, "E-Transit")
+        self.assertEqual(vehicle.model, promaster)
+        self.assertEqual(vehicle.model.make, ram)
+
+    def test_patch_vehicle_model_id(self):
+        vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
+        f150 = VehicleModel.objects.create(make=self.ford, name="F-150")
+
+        response = self.client.patch(
+            f"/api/v1/vehicles/{vehicle.pk}/",
+            {"model_id": f150.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["model"], {"id": f150.pk, "name": "F-150"})
+        vehicle.refresh_from_db()
+        self.assertEqual(vehicle.model, f150)
+
+    def test_patch_with_make_or_model_names_is_rejected_and_changes_nothing(self):
+        vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
+        f150 = VehicleModel.objects.create(make=self.ford, name="F-150")
+
+        response = self.client.patch(
+            f"/api/v1/vehicles/{vehicle.pk}/",
+            {
+                "model": "E-Transit",
+                "make": "Ford",
+                "model_id": f150.pk,
+                "license_plate": "AB-2002",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data,
+            {
+                "make": ["Make is read-only and is derived from model_id."],
+                "model": ["Use model_id to set the vehicle model."],
+            },
+        )
+        vehicle.refresh_from_db()
+        self.assertEqual(vehicle.model, self.transit)
+        self.assertEqual(vehicle.license_plate, "AB-1001")
+        self.assertFalse(VehicleModel.objects.filter(name="E-Transit").exists())
 
     def test_vehicle_can_keep_its_own_plate_on_update(self):
         vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
@@ -464,6 +607,48 @@ class MechanicApiTests(FleetApiTestCase):
         self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Mechanic.objects.filter(pk=mechanic_id).exists())
 
+    def test_duplicate_certification_number_is_rejected(self):
+        other = Mechanic.objects.create(name="Sam Lee", certification_number="CERT-002")
+        requests = (
+            (
+                "post",
+                "/api/v1/mechanics/",
+                {"name": "Kim Park", "certification_number": "CERT-001"},
+            ),
+            (
+                "patch",
+                f"/api/v1/mechanics/{other.pk}/",
+                {"certification_number": "CERT-001"},
+            ),
+        )
+
+        for method, url, payload in requests:
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(url, payload, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(
+                    response.data,
+                    {
+                        "certification_number": [
+                            "mechanic with this certification number already exists."
+                        ]
+                    },
+                )
+
+        other.refresh_from_db()
+        self.assertEqual(other.certification_number, "CERT-002")
+        self.assertEqual(Mechanic.objects.count(), 2)
+
+    def test_mechanic_can_keep_its_own_certification_number_on_update(self):
+        response = self.client.put(
+            f"/api/v1/mechanics/{self.mechanic.pk}/",
+            {"name": "Alex R.", "certification_number": "CERT-001", "active": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_delete_mechanic_referenced_by_record_returns_conflict(self):
         vehicle = self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
         self.create_record(vehicle=vehicle)
@@ -535,6 +720,148 @@ class MaintenanceTypeApiTests(FleetApiTestCase):
         )
 
 
+class VehicleMakeApiTests(FleetApiTestCase):
+    def test_list_and_retrieve_vehicle_makes_ordered_by_name(self):
+        VehicleMake.objects.create(name="Chevrolet")
+
+        list_response = self.client.get("/api/v1/vehicle-makes/")
+        detail_response = self.client.get(f"/api/v1/vehicle-makes/{self.ford.pk}/")
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [make["name"] for make in list_response.data["results"]],
+            ["Chevrolet", "Ford"],
+        )
+        self.assertEqual(detail_response.data, {"id": self.ford.pk, "name": "Ford"})
+
+    def test_create_update_and_delete_vehicle_make(self):
+        create_response = self.client.post(
+            "/api/v1/vehicle-makes/",
+            {"name": "Ram"},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        make_id = create_response.data["id"]
+
+        update_response = self.client.put(
+            f"/api/v1/vehicle-makes/{make_id}/",
+            {"name": "RAM"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(VehicleMake.objects.get(pk=make_id).name, "RAM")
+
+        delete_response = self.client.delete(f"/api/v1/vehicle-makes/{make_id}/")
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(VehicleMake.objects.filter(pk=make_id).exists())
+
+    def test_duplicate_vehicle_make_name_is_rejected(self):
+        response = self.client.post(
+            "/api/v1/vehicle-makes/",
+            {"name": "Ford"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", response.data)
+
+    def test_delete_make_referenced_by_model_returns_conflict(self):
+        response = self.client.delete(f"/api/v1/vehicle-makes/{self.ford.pk}/")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("detail", response.data)
+        self.assertTrue(VehicleMake.objects.filter(pk=self.ford.pk).exists())
+
+
+class VehicleModelApiTests(FleetApiTestCase):
+    def test_list_and_retrieve_models_with_nested_make(self):
+        chevrolet = VehicleMake.objects.create(name="Chevrolet")
+        express = VehicleModel.objects.create(make=chevrolet, name="Express")
+        f150 = VehicleModel.objects.create(make=self.ford, name="F-150")
+
+        list_response = self.client.get("/api/v1/vehicle-models/")
+        detail_response = self.client.get(f"/api/v1/vehicle-models/{self.transit.pk}/")
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [model["id"] for model in list_response.data["results"]],
+            [express.pk, f150.pk, self.transit.pk],
+        )
+        self.assertEqual(
+            detail_response.data,
+            {
+                "id": self.transit.pk,
+                "name": "Transit",
+                "make": {"id": self.ford.pk, "name": "Ford"},
+            },
+        )
+
+    def test_create_update_and_delete_vehicle_model_with_make_id(self):
+        ram = VehicleMake.objects.create(name="Ram")
+        create_response = self.client.post(
+            "/api/v1/vehicle-models/",
+            {"name": "ProMaster", "make_id": ram.pk},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_response.data["make"], {"id": ram.pk, "name": "Ram"})
+        self.assertNotIn("make_id", create_response.data)
+        model_id = create_response.data["id"]
+
+        update_response = self.client.patch(
+            f"/api/v1/vehicle-models/{model_id}/",
+            {"make_id": self.ford.pk},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(VehicleModel.objects.get(pk=model_id).make, self.ford)
+
+        delete_response = self.client.delete(f"/api/v1/vehicle-models/{model_id}/")
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(VehicleModel.objects.filter(pk=model_id).exists())
+
+    def test_model_name_must_be_unique_within_its_make(self):
+        response = self.client.post(
+            "/api/v1/vehicle-models/",
+            {"name": "Transit", "make_id": self.ford.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(VehicleModel.objects.filter(name="Transit").count(), 1)
+
+    def test_same_model_name_is_accepted_under_another_make(self):
+        ram = VehicleMake.objects.create(name="Ram")
+
+        response = self.client.post(
+            "/api/v1/vehicle-models/",
+            {"name": "Transit", "make_id": ram.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_invalid_make_id_is_rejected(self):
+        for make_id in (999999, None):
+            with self.subTest(make_id=make_id):
+                response = self.client.post(
+                    "/api/v1/vehicle-models/",
+                    {"name": "Van", "make_id": make_id},
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("make_id", response.data)
+
+    def test_delete_model_referenced_by_vehicle_returns_conflict(self):
+        self.create_vehicle(vin="1FTBR1C80NKA00001", license_plate="AB-1001")
+
+        response = self.client.delete(f"/api/v1/vehicle-models/{self.transit.pk}/")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(VehicleModel.objects.filter(pk=self.transit.pk).exists())
+
+
 class MaintenanceRecordApiTests(FleetApiTestCase):
     @classmethod
     def setUpTestData(cls):
@@ -542,8 +869,7 @@ class MaintenanceRecordApiTests(FleetApiTestCase):
         cls.vehicle = Vehicle.objects.create(
             vin="1FTBR1C80NKA00001",
             license_plate="AB-1001",
-            make="Ford",
-            model="Transit",
+            model=cls.transit,
             year=2022,
             office=cls.office,
         )
@@ -579,8 +905,8 @@ class MaintenanceRecordApiTests(FleetApiTestCase):
                     "id": self.vehicle.pk,
                     "vin": "1FTBR1C80NKA00001",
                     "license_plate": "AB-1001",
-                    "make": "Ford",
-                    "model": "Transit",
+                    "make": {"id": self.ford.pk, "name": "Ford"},
+                    "model": {"id": self.transit.pk, "name": "Transit"},
                 },
                 "mechanic": {
                     "id": self.mechanic.pk,
@@ -694,19 +1020,60 @@ class MaintenanceRecordApiTests(FleetApiTestCase):
 class ListQueryCountTests(FleetApiTestCase):
     """List endpoints must not issue one extra query per row."""
 
-    def test_vehicle_list_query_count_does_not_grow_with_rows(self):
-        for index in range(5):
+    def create_varied_vehicles(self):
+        ram = VehicleMake.objects.create(name="Ram")
+        models = [
+            self.transit,
+            VehicleModel.objects.create(make=self.ford, name="F-150"),
+            VehicleModel.objects.create(make=ram, name="ProMaster"),
+        ]
+        return [
             self.create_vehicle(
                 vin=f"1FTBR1C80NKA0000{index}",
                 license_plate=f"AB-100{index}",
                 office=self.office if index % 2 else self.other_office,
+                model=models[index % len(models)],
             )
+            for index in range(6)
+        ]
 
-        # One COUNT for pagination plus one SELECT joined with offices.
+    def test_vehicle_list_query_count_does_not_grow_with_rows(self):
+        self.create_varied_vehicles()
+
+        # One COUNT for pagination plus one SELECT joined with offices, models and makes.
         with self.assertNumQueries(2):
             response = self.client.get("/api/v1/vehicles/")
 
-        self.assertEqual(len(response.data["results"]), 5)
+        self.assertEqual(len(response.data["results"]), 6)
+        self.assertEqual(
+            {row["make"]["name"] for row in response.data["results"]},
+            {"Ford", "Ram"},
+        )
+
+    def test_vehicle_writes_do_not_query_per_nested_relation(self):
+        [vehicle, *_] = self.create_varied_vehicles()
+        f150 = VehicleModel.objects.get(name="F-150")
+
+        # Vehicle lookup (joined), model_id and office_id validation (model joined with make),
+        # active-plate check, UPDATE. The response reuses the loaded objects.
+        with self.assertNumQueries(5):
+            response = self.client.patch(
+                f"/api/v1/vehicles/{vehicle.pk}/",
+                {"model_id": f150.pk, "office_id": self.office.pk},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["make"]["name"], "Ford")
+
+    def test_vehicle_model_list_query_count_does_not_grow_with_rows(self):
+        self.create_varied_vehicles()
+
+        # One COUNT for pagination plus one SELECT joined with makes.
+        with self.assertNumQueries(2):
+            response = self.client.get("/api/v1/vehicle-models/")
+
+        self.assertEqual(len(response.data["results"]), 3)
 
     def test_maintenance_record_list_query_count_does_not_grow_with_rows(self):
         other_mechanic = Mechanic.objects.create(
@@ -714,19 +1081,20 @@ class ListQueryCountTests(FleetApiTestCase):
             certification_number="CERT-002",
         )
         other_type = MaintenanceType.objects.create(name="Tire Rotation")
-        for index in range(5):
-            vehicle = self.create_vehicle(
-                vin=f"1FTBR1C80NKA0000{index}",
-                license_plate=f"AB-100{index}",
-            )
+        for index, vehicle in enumerate(self.create_varied_vehicles()[:5]):
             self.create_record(
                 vehicle=vehicle,
                 mechanic=other_mechanic if index % 2 else self.mechanic,
                 maintenance_type=other_type if index % 2 else self.maintenance_type,
             )
 
-        # One COUNT for pagination plus one SELECT joined with related tables.
+        # One COUNT for pagination plus one SELECT joined with vehicle, model, make, mechanic
+        # and type.
         with self.assertNumQueries(2):
             response = self.client.get("/api/v1/maintenance-records/")
 
         self.assertEqual(len(response.data["results"]), 5)
+        self.assertEqual(
+            {row["vehicle"]["make"]["name"] for row in response.data["results"]},
+            {"Ford", "Ram"},
+        )

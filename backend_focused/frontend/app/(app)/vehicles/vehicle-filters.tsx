@@ -2,13 +2,17 @@
 
 import { Button, Grid, MenuItem, Paper, Stack, TextField } from '@mui/material';
 import { type ChangeEvent, type FormEvent, useState } from 'react';
-import type { Office } from '@/lib/types';
-import type { VehicleFilterKey, VehicleFilters } from '@/lib/vehicle-search';
+import { modelsOfMake, vehicleModelLabel } from '@/lib/lookups';
+import type { Office, VehicleMake, VehicleModel } from '@/lib/types';
+import { EMPTY_FILTERS, type VehicleFilterKey, type VehicleFilters } from '@/lib/vehicle-search';
 
 type Props = {
   initial: VehicleFilters;
   offices: Office[] | undefined;
   officesFailed: boolean;
+  makes: VehicleMake[] | undefined;
+  models: VehicleModel[] | undefined;
+  catalogFailed: boolean;
   errors: Record<string, string>;
   onSearch: (filters: VehicleFilters) => void;
   onClear: () => void;
@@ -24,16 +28,44 @@ const SHOW_EMPTY_OPTION = { select: { displayEmpty: true }, inputLabel: { shrink
  *
  * The parent remounts it (via `key`) when the URL filters change, so the draft always starts from
  * the current URL, including after browser back and forward.
+ *
+ * Make and model are ids. With a make chosen, the model list shows only its models, and changing
+ * the make clears a model of another make. Without a make, every model is listed with its make.
  */
 export default function VehicleFiltersForm({
   initial,
   offices,
   officesFailed,
+  makes,
+  models,
+  catalogFailed,
   errors,
   onSearch,
   onClear,
 }: Props) {
   const [draft, setDraft] = useState(initial);
+  const modelOptions = models ? modelsOfMake(models, draft.make) : [];
+  // A model id from the URL can be unknown, or belong to another make. It stays selectable so
+  // the search shows what was asked for and the API error explains the problem.
+  const selectedModel = models?.find((model) => String(model.id) === draft.model);
+  const modelMissing =
+    models !== undefined &&
+    draft.model !== '' &&
+    !modelOptions.some((model) => String(model.id) === draft.model);
+  const makeMissing =
+    makes !== undefined &&
+    draft.make !== '' &&
+    !makes.some((make) => String(make.id) === draft.make);
+
+  function changeMake(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    const make = event.target.value;
+    setDraft((current) => {
+      const keepModel =
+        models !== undefined &&
+        modelsOfMake(models, make).some((model) => String(model.id) === current.model);
+      return { ...current, make, model: keepModel ? current.model : '' };
+    });
+  }
 
   function field(key: VehicleFilterKey, hint?: string) {
     return {
@@ -51,6 +83,12 @@ export default function VehicleFiltersForm({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     onSearch(draft);
+  }
+
+  function handleClear() {
+    // The URL may already be empty, and then the parent does not remount this form.
+    setDraft(EMPTY_FILTERS);
+    onClear();
   }
 
   return (
@@ -80,10 +118,43 @@ export default function VehicleFiltersForm({
           </TextField>
         </Grid>
         <Grid size={CELL}>
-          <TextField label="Make" {...field('make', 'Exact match')} />
+          <TextField
+            select
+            label="Make"
+            {...field('make', catalogFailed ? 'Could not load makes' : undefined)}
+            onChange={changeMake}
+            disabled={!makes}
+            slotProps={SHOW_EMPTY_OPTION}
+          >
+            <MenuItem value="">Any make</MenuItem>
+            {makes?.map((make) => (
+              <MenuItem key={make.id} value={String(make.id)}>
+                {make.name}
+              </MenuItem>
+            ))}
+            {makeMissing && <MenuItem value={draft.make}>Unknown make #{draft.make}</MenuItem>}
+          </TextField>
         </Grid>
         <Grid size={CELL}>
-          <TextField label="Model" {...field('model', 'Exact match')} />
+          <TextField
+            select
+            label="Model"
+            {...field('model', catalogFailed ? 'Could not load models' : undefined)}
+            disabled={!models}
+            slotProps={SHOW_EMPTY_OPTION}
+          >
+            <MenuItem value="">Any model</MenuItem>
+            {modelOptions.map((model) => (
+              <MenuItem key={model.id} value={String(model.id)}>
+                {draft.make === '' ? vehicleModelLabel(model) : model.name}
+              </MenuItem>
+            ))}
+            {modelMissing && (
+              <MenuItem value={draft.model}>
+                {selectedModel ? vehicleModelLabel(selectedModel) : `Unknown model #${draft.model}`}
+              </MenuItem>
+            )}
+          </TextField>
         </Grid>
         <Grid size={CELL}>
           <TextField
@@ -109,7 +180,7 @@ export default function VehicleFiltersForm({
             <Button type="submit" variant="contained">
               Search
             </Button>
-            <Button onClick={onClear}>Clear</Button>
+            <Button onClick={handleClear}>Clear</Button>
           </Stack>
         </Grid>
       </Grid>

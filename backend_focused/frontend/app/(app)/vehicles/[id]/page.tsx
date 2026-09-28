@@ -102,7 +102,7 @@ export default function VehicleDetailPage() {
         title={
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <span>
-              {data.make} {data.model}
+              {data.make.name} {data.model.name}
             </span>
             <StatusChip active={data.active} />
           </Stack>

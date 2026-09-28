@@ -6,7 +6,7 @@ import PageHeader from '@/components/page-header';
 import { ErrorAlert, PageSpinner } from '@/components/query-state';
 import { useNotify } from '@/app/providers';
 import { apiClient } from '@/lib/api-client';
-import { useOffices } from '@/lib/lookups';
+import { useOffices, useVehicleMakes, useVehicleModels } from '@/lib/lookups';
 import type { Vehicle, VehicleWrite } from '@/lib/types';
 import VehicleForm from '../vehicle-form';
 
@@ -15,6 +15,8 @@ export default function NewVehiclePage() {
   const queryClient = useQueryClient();
   const notify = useNotify();
   const offices = useOffices();
+  const makes = useVehicleMakes();
+  const models = useVehicleModels();
 
   const create = useMutation({
     mutationFn: async (values: VehicleWrite) =>
@@ -27,20 +29,33 @@ export default function NewVehiclePage() {
     },
   });
 
+  const loadError = offices.error ?? makes.error ?? models.error;
+
   return (
     <>
       <PageHeader title="New vehicle" back={{ href: '/vehicles', label: 'Vehicles' }} />
-      {offices.isPending && <PageSpinner />}
-      {offices.isError && <ErrorAlert error={offices.error} onRetry={() => offices.refetch()} />}
-      {offices.data && (
+      {loadError ? (
+        <ErrorAlert
+          error={loadError}
+          onRetry={() => {
+            offices.refetch();
+            makes.refetch();
+            models.refetch();
+          }}
+        />
+      ) : offices.data && makes.data && models.data ? (
         <VehicleForm
           offices={offices.data}
+          makes={makes.data}
+          models={models.data}
           submitLabel="Create vehicle"
           isPending={create.isPending}
           error={create.error}
           onSubmit={(values) => create.mutate(values)}
           cancelHref="/vehicles"
         />
+      ) : (
+        <PageSpinner />
       )}
     </>
   );
