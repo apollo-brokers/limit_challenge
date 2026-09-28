@@ -39,7 +39,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
-    'fleet',
+    'offices.apps.OfficesConfig',
+    'fleet.apps.FleetConfig',
+    'maintenance.apps.MaintenanceConfig',
 ]
 
 MIDDLEWARE = [
