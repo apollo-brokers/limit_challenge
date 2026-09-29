@@ -73,13 +73,13 @@ class VehicleService:
             setattr(vehicle, field, value)
 
         if changes:
-            vehicle.save(update_fields=list(changes))
+            vehicle.save(update_fields=[*changes, "updated_at"])
 
         return vehicle
 
     def assign_office(self, vehicle: Vehicle, office: Office) -> Vehicle:
         vehicle.office = office
-        vehicle.save(update_fields=["office"])
+        vehicle.save(update_fields=["office", "updated_at"])
         return vehicle
 
     def find_needing_maintenance(self) -> VehicleQuerySet:

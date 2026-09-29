@@ -7,6 +7,8 @@ class Mechanic(models.Model):
     name = models.CharField(max_length=255)
     certification_number = models.CharField(max_length=100)
     active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = MechanicQuerySet.as_manager()
 
@@ -32,6 +34,8 @@ class MaintenanceRecord(models.Model):
         decimal_places=2,
     )
     notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = MaintenanceRecordQuerySet.as_manager()
 

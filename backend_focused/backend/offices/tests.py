@@ -20,6 +20,8 @@ class OfficeApiTests(APITestCase):
         )
 
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("created_at", create_response.data)
+        self.assertIn("updated_at", create_response.data)
         office_id = create_response.data["id"]
 
         detail_url = reverse("office-detail", args=[office_id])

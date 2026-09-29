@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 import pytest
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -37,6 +38,8 @@ class VehicleApiTests(APITestCase):
         )
 
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("created_at", create_response.data)
+        self.assertIn("updated_at", create_response.data)
         vehicle_id = create_response.data["id"]
 
         detail_url = reverse("vehicle-detail", args=[vehicle_id])
@@ -178,6 +181,40 @@ class VehicleConflictServiceTests(TestCase):
         )
 
         self.assertEqual(conflicts, [])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("vin", "license_plate"),
+    [
+        ("1hgcm82633a004352", "XYZ-9876"),
+        ("1HGCM82633A004353", "abc-1234"),
+    ],
+    ids=["vin", "active-license-plate"],
+)
+def test_rejects_vehicle_conflicts_created_directly_in_database(
+    vin,
+    license_plate,
+):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=office,
+    )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Vehicle.objects.create(
+            vin=vin,
+            license_plate=license_plate,
+            make="Toyota",
+            model="Corolla",
+            year=2023,
+            office=office,
+        )
 
 
 @pytest.fixture
@@ -361,21 +398,36 @@ def test_vehicle_detail_includes_office_and_maintenance_history():
     response = APIClient().get(reverse("vehicle-detail", args=[vehicle.id]))
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.data["office"] == {
+    office_data = response.data["office"]
+    assert {
+        "id": office_data["id"],
+        "name": office_data["name"],
+        "city": office_data["city"],
+    } == {
         "id": office.id,
         "name": office.name,
         "city": office.city,
     }
+    assert office_data["created_at"] is not None
+    assert office_data["updated_at"] is not None
     assert len(response.data["maintenance_records"]) == 2
 
     for maintenance_record in response.data["maintenance_records"]:
         assert maintenance_record["vehicle"] == vehicle.id
-        assert maintenance_record["mechanic"] == {
+        mechanic_data = maintenance_record["mechanic"]
+        assert {
+            "id": mechanic_data["id"],
+            "name": mechanic_data["name"],
+            "certification_number": mechanic_data["certification_number"],
+            "active": mechanic_data["active"],
+        } == {
             "id": mechanic.id,
             "name": mechanic.name,
             "certification_number": mechanic.certification_number,
             "active": mechanic.active,
         }
+        assert mechanic_data["created_at"] is not None
+        assert mechanic_data["updated_at"] is not None
 
 
 @pytest.mark.parametrize(
@@ -488,6 +540,7 @@ def test_assigns_vehicle_to_another_office():
         year=2022,
         office=current_office,
     )
+    previous_updated_at = vehicle.updated_at
 
     response = APIClient().post(
         reverse("vehicle-assign-office", args=[vehicle.id]),
@@ -500,6 +553,7 @@ def test_assigns_vehicle_to_another_office():
 
     vehicle.refresh_from_db()
     assert vehicle.office == new_office
+    assert vehicle.updated_at > previous_updated_at
 
 
 @pytest.mark.parametrize(

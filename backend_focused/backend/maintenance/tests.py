@@ -24,6 +24,8 @@ class MechanicApiTests(APITestCase):
         )
 
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("created_at", create_response.data)
+        self.assertIn("updated_at", create_response.data)
         mechanic_id = create_response.data["id"]
 
         detail_url = reverse("mechanic-detail", args=[mechanic_id])
@@ -104,6 +106,8 @@ class MaintenanceRecordApiTests(APITestCase):
         )
 
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("created_at", create_response.data)
+        self.assertIn("updated_at", create_response.data)
         record_id = create_response.data["id"]
 
         detail_url = reverse("maintenance-record-detail", args=[record_id])
