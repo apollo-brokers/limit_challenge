@@ -5,6 +5,7 @@ from rest_framework.routers import DefaultRouter
 from fleet.views import VehicleViewSet
 from maintenance.views import MaintenanceRecordViewSet, MechanicViewSet
 from offices.views import OfficeViewSet
+from server.views import health_check
 
 router = DefaultRouter()
 router.register("offices", OfficeViewSet, basename="office")
@@ -17,6 +18,7 @@ router.register(
 )
 
 urlpatterns = [
+    path("health/", health_check, name="health-check"),
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
 ]

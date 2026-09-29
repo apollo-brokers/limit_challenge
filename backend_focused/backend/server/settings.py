@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -23,7 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure--i^5bam1xi!k^$hyanp@-1kgey0aciz8=i55n@-pn5^!9jl8_c"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+
+LOG_SQL = os.getenv("DJANGO_LOG_SQL", "true").lower() == "true"
 
 ALLOWED_HOSTS = []
 
@@ -145,3 +148,33 @@ JSON_UNDERSCOREIZE = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
+        },
+    },
+    "formatters": {
+        "sql": {
+            "format": "[SQL] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "sql_console": {
+            "class": "logging.StreamHandler",
+            "filters": ["require_debug_true"],
+            "formatter": "sql",
+        },
+    },
+    "loggers": {
+        "django.db.backends": {
+            "handlers": ["sql_console"],
+            "level": "DEBUG" if LOG_SQL else "WARNING",
+            "propagate": False,
+        },
+    },
+}

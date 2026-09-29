@@ -46,6 +46,8 @@ seed-clear: migrate ## Replace existing fleet data with dummy data
 test: build ## Run the test suite
 	$(COMPOSE) run --rm $(SERVICE) pytest
 
+load-test load-test-ui: export DJANGO_LOG_SQL = false
+
 load-test: start ## Run the headless load test
 	$(COMPOSE) --profile load-test run --rm locust \
 		locust --locustfile load_tests/locustfile.py \
