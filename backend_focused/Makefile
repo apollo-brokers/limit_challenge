@@ -3,7 +3,7 @@ SERVICE := backend
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build up start down logs shell migrate seed seed-large seed-clear test format format-check django-check migrations-check check
+.PHONY: help build up start down logs shell migrate seed seed-large seed-clear test load-test load-test-ui format format-check django-check migrations-check check
 
 help: ## Show the available commands
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -15,7 +15,7 @@ up: ## Build and run the API in the foreground
 	$(COMPOSE) up --build
 
 start: ## Build and run the API in the background
-	$(COMPOSE) up --build --detach
+	$(COMPOSE) up --build --detach --wait
 
 down: ## Stop the containers
 	$(COMPOSE) down
@@ -45,6 +45,20 @@ seed-clear: migrate ## Replace existing fleet data with dummy data
 
 test: build ## Run the test suite
 	$(COMPOSE) run --rm $(SERVICE) pytest
+
+load-test: start ## Run the headless load test
+	$(COMPOSE) --profile load-test run --rm locust \
+		locust --locustfile load_tests/locustfile.py \
+		--host http://backend:8000 \
+		--headless \
+		--users 20 \
+		--spawn-rate 5 \
+		--run-time 30s \
+		--stop-timeout 5s \
+		--only-summary
+
+load-test-ui: start ## Open the Locust UI at http://localhost:8089
+	$(COMPOSE) --profile load-test up locust
 
 format: build ## Format the backend code with Black
 	$(COMPOSE) run --rm $(SERVICE) black .

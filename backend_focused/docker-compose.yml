@@ -1,5 +1,6 @@
 services:
   backend:
+    image: fleet-maintenance-backend
     build:
       context: ./backend
     command: >
@@ -12,3 +13,33 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >
+          import urllib.request;
+          urllib.request.urlopen('http://localhost:8000/api/offices/', timeout=2)
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
+  locust:
+    image: fleet-maintenance-backend
+    profiles:
+      - load-test
+    command: >
+      locust --locustfile load_tests/locustfile.py
+      --host http://backend:8000
+    environment:
+      LOCUST_MAX_FAILURE_RATIO: "0.01"
+      LOCUST_MAX_P95_MS: "1000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8089:8089"
+    depends_on:
+      backend:
+        condition: service_healthy
