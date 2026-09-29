@@ -1,6 +1,8 @@
-from drf_spectacular.utils import extend_schema
-from rest_framework import viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
 from fleet.filters import VehicleFilter
@@ -20,9 +22,11 @@ from maintenance.serializers import MaintenanceRecordSerializer
 
 @extend_schema(tags=["Vehicles"])
 class VehicleViewSet(viewsets.ModelViewSet):
-    queryset: VehicleQuerySet = Vehicle.objects.order_by("id")
+    queryset: VehicleQuerySet = Vehicle.objects.order_by("-id")
     serializer_class = VehicleSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_class = VehicleFilter
+    search_fields = ["vin", "license_plate", "make", "model"]
 
     def get_queryset(self):
         queryset: VehicleQuerySet = super().get_queryset()
@@ -38,11 +42,13 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
         return super().get_serializer_class()
 
+    @extend_schema(responses=MaintenanceRecordSerializer(many=True), filters=False)
     @action(
         detail=True,
         methods=["get"],
         url_path="maintenance-history",
         serializer_class=MaintenanceRecordSerializer,
+        filter_backends=[],
     )
     def maintenance_history(self, request, pk=None):
         vehicle = self.get_object()
@@ -58,11 +64,13 @@ class VehicleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(maintenance_records, many=True)
         return Response(serializer.data)
 
+    @extend_schema(responses=VehicleSerializer)
     @action(
         detail=True,
         methods=["post"],
         url_path="assign-office",
         serializer_class=VehicleAssignmentSerializer,
+        filter_backends=[],
     )
     def assign_office(self, request, pk=None):
         vehicle = self.get_object()
@@ -77,11 +85,16 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
         return Response(VehicleSerializer(vehicle).data)
 
+    @extend_schema(
+        responses=VehicleNeedingMaintenanceSerializer(many=True),
+        filters=False,
+    )
     @action(
         detail=False,
         methods=["get"],
         url_path="needing-maintenance",
         serializer_class=VehicleNeedingMaintenanceSerializer,
+        filter_backends=[],
     )
     def needing_maintenance(self, request):
         vehicle_service = VehicleService()
@@ -95,11 +108,18 @@ class VehicleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(vehicles, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="VehicleDuplicateCheckResult",
+            fields={"conflicts": serializers.ListField(child=serializers.CharField())},
+        ),
+    )
     @action(
         detail=False,
         methods=["post"],
         url_path="duplicate-check",
         serializer_class=VehicleDuplicateCheckSerializer,
+        filter_backends=[],
     )
     def duplicate_check(self, request):
         serializer = self.get_serializer(data=request.data)

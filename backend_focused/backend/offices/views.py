@@ -4,6 +4,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
 from offices.models import Office
@@ -15,11 +16,16 @@ from offices.serializers import OfficeSerializer, OfficeSummarySerializer
 class OfficeViewSet(viewsets.ModelViewSet):
     queryset = Office.objects.order_by("id")
     serializer_class = OfficeSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ["name", "city"]
 
+    @extend_schema(responses=OfficeSummarySerializer(many=True), filters=False)
     @action(
         detail=False,
         methods=["get"],
         serializer_class=OfficeSummarySerializer,
+        pagination_class=None,
+        filter_backends=[],
     )
     def summary(self, request):
         maintenance_cutoff = timezone.localdate() - timedelta(days=365)

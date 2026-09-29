@@ -3,7 +3,7 @@ SERVICE := backend
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build up start down logs shell migrate seed seed-large seed-clear test load-test load-test-ui format format-check django-check migrations-check check
+.PHONY: help build up start down logs shell migrate seed seed-large seed-performance seed-clear test load-test load-test-ui format format-check django-check migrations-check check
 
 help: ## Show the available commands
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -39,6 +39,12 @@ seed-large: migrate ## Fill an empty database with a performance testing dataset
 		--mechanics 30 \
 		--maintenance-records 20000 \
 		--seed 42
+
+seed-performance: export DJANGO_LOG_SQL = false
+seed-performance: export DJANGO_DEBUG = false
+
+seed-performance: migrate ## Add named 1k, 10k, 50k and 100k history vehicles without clearing data
+	$(COMPOSE) run --rm $(SERVICE) python manage.py seed_performance
 
 seed-clear: migrate ## Replace existing fleet data with dummy data
 	$(COMPOSE) run --rm $(SERVICE) python manage.py seed_data --clear

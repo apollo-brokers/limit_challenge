@@ -151,6 +151,7 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "API for managing vehicles and their maintenance history.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 JSON_UNDERSCOREIZE = {

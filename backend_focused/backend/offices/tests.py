@@ -62,6 +62,35 @@ class OfficeApiTests(APITestCase):
 
 
 @pytest.mark.django_db
+def test_office_search_matches_name_or_city_and_filters_before_pagination():
+    offices = Office.objects.bulk_create(
+        [Office(name=f"Downtown {index}", city="Boston") for index in range(12)]
+    )
+    Office.objects.create(name="Uptown Office", city="New York")
+    client = APIClient()
+    url = reverse("office-list")
+
+    for search in ["DOWNTOWN", "boston"]:
+        response = client.get(url, {"search": search})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 12
+        assert len(response.data["results"]) == 10
+        assert f"search={search}" in response.data["next"]
+
+        second_page = client.get(url, {"search": search, "page": 2})
+        assert second_page.status_code == status.HTTP_200_OK
+        assert second_page.data["count"] == 12
+        assert [item["id"] for item in second_page.data["results"]] == [
+            office.id for office in offices[10:]
+        ]
+
+    assert client.get(url).data["count"] == 13
+    assert client.get(url, {"search": ""}).data["count"] == 13
+    assert client.get(url, {"search": "missing"}).data["count"] == 0
+    assert len(client.get(reverse("office-summary"), {"search": "missing"}).data) == 13
+
+
+@pytest.mark.django_db
 def test_office_summary(django_assert_num_queries):
     office = Office.objects.create(name="Downtown Office", city="New York")
     empty_office = Office.objects.create(name="Uptown Office", city="Boston")

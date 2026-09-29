@@ -369,6 +369,44 @@ def test_rejects_invalid_maintenance_date_filter(vehicle_search_data, parameter)
     assert "maintenance_date" in response.data
 
 
+@pytest.mark.parametrize("search", ["abc-123", "004352", "HONDA", "accord"])
+def test_vehicle_search_combines_with_existing_filters(vehicle_search_data, search):
+    client = vehicle_search_data["client"]
+    response = client.get(
+        reverse("vehicle-list"),
+        {
+            "search": search,
+            "office": vehicle_search_data["primary_office"].id,
+            "active": "true",
+            "maintenance_date_after": "2026-02-01",
+            "maintenance_date_before": "2026-03-01",
+            "mechanic_certification_number": "ase-001",
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["id"] == vehicle_search_data["honda"].id
+    assert client.get(reverse("vehicle-list")).data["count"] == 3
+    assert client.get(reverse("vehicle-list"), {"search": ""}).data["count"] == 3
+    assert (
+        client.get(reverse("vehicle-list"), {"search": search, "active": "false"}).data[
+            "count"
+        ]
+        == 0
+    )
+
+
+def test_list_search_does_not_filter_vehicle_actions(vehicle_search_data):
+    client = vehicle_search_data["client"]
+    vehicle = vehicle_search_data["honda"]
+    for url in [
+        reverse("vehicle-maintenance-history", args=[vehicle.id]),
+        reverse("vehicle-needing-maintenance"),
+    ]:
+        assert client.get(url, {"search": "missing"}).data == client.get(url).data
+
+
 @pytest.mark.django_db
 def test_vehicle_detail_includes_office_and_maintenance_history():
     office = Office.objects.create(name="Downtown Office", city="New York")
