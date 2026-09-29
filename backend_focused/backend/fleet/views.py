@@ -8,6 +8,7 @@ from fleet.models import Vehicle
 from fleet.serializers import (
     VehicleAssignmentSerializer,
     VehicleDetailSerializer,
+    VehicleNeedingMaintenanceSerializer,
     VehicleSerializer,
 )
 from fleet.services import VehicleService
@@ -77,3 +78,21 @@ class VehicleViewSet(viewsets.ModelViewSet):
         )
 
         return Response(VehicleSerializer(vehicle).data)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="needing-maintenance",
+        serializer_class=VehicleNeedingMaintenanceSerializer,
+    )
+    def needing_maintenance(self, request):
+        vehicle_service = VehicleService()
+        vehicles = vehicle_service.find_needing_maintenance()
+
+        page = self.paginate_queryset(vehicles)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(vehicles, many=True)
+        return Response(serializer.data)

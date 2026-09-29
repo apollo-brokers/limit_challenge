@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
@@ -520,3 +521,68 @@ def test_assign_vehicle_returns_not_found_for_unknown_vehicle():
     )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_returns_active_vehicles_needing_maintenance(django_assert_num_queries):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    mechanic = Mechanic.objects.create(
+        name="Jane Smith",
+        certification_number="ASE-001",
+    )
+
+    def create_vehicle(identifier, active=True):
+        return Vehicle.objects.create(
+            vin=f"1HGCM82633A{identifier:06d}",
+            license_plate=f"TEST-{identifier}",
+            make="Honda",
+            model="Accord",
+            year=2022,
+            office=office,
+            active=active,
+        )
+
+    never_maintained = create_vehicle(1)
+    oldest_maintenance = create_vehicle(2)
+    old_maintenance = create_vehicle(3)
+    recently_maintained = create_vehicle(4)
+    boundary_maintenance = create_vehicle(5)
+    inactive_vehicle = create_vehicle(6, active=False)
+    today = timezone.localdate()
+
+    maintenance_records = [
+        (oldest_maintenance, today - timedelta(days=500)),
+        (old_maintenance, today - timedelta(days=400)),
+        (recently_maintained, today - timedelta(days=500)),
+        (recently_maintained, today - timedelta(days=30)),
+        (boundary_maintenance, today - timedelta(days=365)),
+        (inactive_vehicle, today - timedelta(days=500)),
+    ]
+    MaintenanceRecord.objects.bulk_create(
+        [
+            MaintenanceRecord(
+                vehicle=vehicle,
+                mechanic=mechanic,
+                maintenance_date=maintenance_date,
+                maintenance_type="Inspection",
+                cost="100.00",
+            )
+            for vehicle, maintenance_date in maintenance_records
+        ]
+    )
+
+    with django_assert_num_queries(2):
+        response = APIClient().get(reverse("vehicle-needing-maintenance"))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["count"] == 3
+    assert [vehicle["id"] for vehicle in response.data["results"]] == [
+        never_maintained.id,
+        oldest_maintenance.id,
+        old_maintenance.id,
+    ]
+    assert [vehicle["last_maintenance"] for vehicle in response.data["results"]] == [
+        None,
+        (today - timedelta(days=500)).isoformat(),
+        (today - timedelta(days=400)).isoformat(),
+    ]

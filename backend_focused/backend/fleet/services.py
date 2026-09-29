@@ -1,3 +1,8 @@
+from datetime import timedelta
+
+from django.db.models import F, Max, Q, QuerySet
+from django.utils import timezone
+
 from fleet.models import Vehicle
 from offices.models import Office
 
@@ -76,3 +81,16 @@ class VehicleService:
         vehicle.office = office
         vehicle.save(update_fields=["office"])
         return vehicle
+
+    def find_needing_maintenance(self) -> QuerySet[Vehicle]:
+        maintenance_cutoff = timezone.localdate() - timedelta(days=365)
+
+        return (
+            Vehicle.objects.filter(active=True)
+            .annotate(last_maintenance=Max("maintenance_records__maintenance_date"))
+            .filter(
+                Q(last_maintenance__isnull=True)
+                | Q(last_maintenance__lt=maintenance_cutoff)
+            )
+            .order_by(F("last_maintenance").asc(nulls_first=True), "id")
+        )

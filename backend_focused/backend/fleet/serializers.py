@@ -52,3 +52,11 @@ class VehicleDetailSerializer(serializers.ModelSerializer):
 
 class VehicleAssignmentSerializer(serializers.Serializer):
     office = serializers.PrimaryKeyRelatedField(queryset=Office.objects.all())
+
+
+class VehicleNeedingMaintenanceSerializer(serializers.ModelSerializer):
+    last_maintenance = serializers.DateField(allow_null=True)
+
+    class Meta:
+        model = Vehicle
+        fields = "__all__"
