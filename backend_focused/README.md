@@ -37,6 +37,10 @@ npm run dev
 
 Open [Fleet Tracker at localhost:3000](http://localhost:3000). The frontend uses the local API at `http://localhost:8000/api` by default. See [frontend/README.md](./frontend/README.md) for API type generation, configuration, architecture, and checks.
 
+## Demo
+
+Watch the [silent end-to-end frontend demonstration](./docs/fleet-tracker-demo.mp4) (1 minute 59 seconds).
+
 ## Tests
 
 ```bash
