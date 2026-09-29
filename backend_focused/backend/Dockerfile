@@ -5,8 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --requirement requirements.txt
+ARG REQUIREMENTS_FILE=requirements-dev.txt
+
+COPY requirements*.txt ./
+RUN pip install --no-cache-dir --requirement "${REQUIREMENTS_FILE}"
 
 COPY . .
 
