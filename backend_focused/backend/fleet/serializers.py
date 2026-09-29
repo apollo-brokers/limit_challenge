@@ -60,3 +60,8 @@ class VehicleNeedingMaintenanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = "__all__"
+
+
+class VehicleDuplicateCheckSerializer(serializers.Serializer):
+    vin = serializers.CharField(max_length=17)
+    license_plate = serializers.CharField(max_length=20)

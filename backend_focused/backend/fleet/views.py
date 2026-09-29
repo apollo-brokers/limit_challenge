@@ -8,6 +8,7 @@ from fleet.models import Vehicle
 from fleet.serializers import (
     VehicleAssignmentSerializer,
     VehicleDetailSerializer,
+    VehicleDuplicateCheckSerializer,
     VehicleNeedingMaintenanceSerializer,
     VehicleSerializer,
 )
@@ -96,3 +97,21 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(vehicles, many=True)
         return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="duplicate-check",
+        serializer_class=VehicleDuplicateCheckSerializer,
+    )
+    def duplicate_check(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        vehicle_service = VehicleService()
+        conflicts = vehicle_service.find_conflicts(
+            vin=serializer.validated_data["vin"],
+            license_plate=serializer.validated_data["license_plate"],
+        )
+
+        return Response({"conflicts": conflicts})

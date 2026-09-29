@@ -586,3 +586,62 @@ def test_returns_active_vehicles_needing_maintenance(django_assert_num_queries):
         (today - timedelta(days=500)).isoformat(),
         (today - timedelta(days=400)).isoformat(),
     ]
+
+
+@pytest.mark.parametrize(
+    ("vin", "license_plate", "expected_conflicts"),
+    [
+        ("1HGCM82633A004999", "NO-CONFLICT", []),
+        ("1hgcm82633a004352", "NO-CONFLICT", ["vin"]),
+        ("1HGCM82633A004999", "abc-1234", ["license_plate"]),
+        (
+            "1hgcm82633a004352",
+            "abc-1234",
+            ["vin", "license_plate"],
+        ),
+    ],
+    ids=["none", "vin", "license-plate", "both"],
+)
+@pytest.mark.django_db
+def test_duplicate_vehicle_check(vin, license_plate, expected_conflicts):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=office,
+    )
+
+    response = APIClient().post(
+        reverse("vehicle-duplicate-check"),
+        {
+            "vin": vin,
+            "license_plate": license_plate,
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data == {"conflicts": expected_conflicts}
+
+
+@pytest.mark.parametrize(
+    ("payload", "missing_field"),
+    [
+        ({"license_plate": "ABC-1234"}, "vin"),
+        ({"vin": "1HGCM82633A004352"}, "license_plate"),
+    ],
+    ids=["missing-vin", "missing-license-plate"],
+)
+@pytest.mark.django_db
+def test_duplicate_vehicle_check_requires_both_fields(payload, missing_field):
+    response = APIClient().post(
+        reverse("vehicle-duplicate-check"),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert missing_field in response.data
