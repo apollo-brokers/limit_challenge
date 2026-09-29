@@ -3,7 +3,7 @@ SERVICE := backend
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build up start down logs shell migrate seed seed-clear test format format-check django-check migrations-check check
+.PHONY: help build up start down logs shell migrate seed seed-large seed-clear test format format-check django-check migrations-check check
 
 help: ## Show the available commands
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -31,6 +31,14 @@ migrate: build ## Apply database migrations
 
 seed: migrate ## Fill an empty database with dummy data
 	$(COMPOSE) run --rm $(SERVICE) python manage.py seed_data
+
+seed-large: migrate ## Fill an empty database with a performance testing dataset
+	$(COMPOSE) run --rm $(SERVICE) python manage.py seed_data \
+		--offices 20 \
+		--vehicles 100 \
+		--mechanics 30 \
+		--maintenance-records 20000 \
+		--seed 42
 
 seed-clear: migrate ## Replace existing fleet data with dummy data
 	$(COMPOSE) run --rm $(SERVICE) python manage.py seed_data --clear
