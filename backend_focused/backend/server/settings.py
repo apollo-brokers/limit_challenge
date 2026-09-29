@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "drf_spectacular",
     "django_filters",
     "offices.apps.OfficesConfig",
     "fleet.apps.FleetConfig",
@@ -133,6 +134,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "server.exception_handler.api_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
     "DEFAULT_FILTER_BACKENDS": [
@@ -142,6 +144,13 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Fleet Maintenance API",
+    "DESCRIPTION": "API for managing vehicles and their maintenance history.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 JSON_UNDERSCOREIZE = {

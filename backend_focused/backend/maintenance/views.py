@@ -1,4 +1,5 @@
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -12,6 +13,7 @@ from maintenance.serializers import (
 )
 
 
+@extend_schema(tags=["Mechanics"])
 class MechanicViewSet(viewsets.ModelViewSet):
     queryset = Mechanic.objects.order_by("id")
     serializer_class = MechanicSerializer
@@ -29,6 +31,7 @@ class MechanicViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema(tags=["Maintenance Records"])
 class MaintenanceRecordViewSet(viewsets.ModelViewSet):
     queryset = MaintenanceRecord.objects.order_by("id")
     serializer_class = MaintenanceRecordSerializer

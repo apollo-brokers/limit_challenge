@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -17,6 +18,7 @@ from maintenance.models import MaintenanceRecord
 from maintenance.serializers import MaintenanceRecordSerializer
 
 
+@extend_schema(tags=["Vehicles"])
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset: VehicleQuerySet = Vehicle.objects.order_by("id")
     serializer_class = VehicleSerializer

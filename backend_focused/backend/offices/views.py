@@ -1,5 +1,7 @@
 from datetime import timedelta
+
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,6 +11,7 @@ from offices.querysets import OfficeQuerySet
 from offices.serializers import OfficeSerializer, OfficeSummarySerializer
 
 
+@extend_schema(tags=["Offices"])
 class OfficeViewSet(viewsets.ModelViewSet):
     queryset = Office.objects.order_by("id")
     serializer_class = OfficeSerializer
