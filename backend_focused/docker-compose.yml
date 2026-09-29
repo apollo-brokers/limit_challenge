@@ -1,0 +1,14 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"

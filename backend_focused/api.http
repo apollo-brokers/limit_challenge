@@ -1,0 +1,152 @@
+@baseUrl = http://localhost:8000/api
+@officeId = 1
+@newOfficeId = 2
+@vehicleId = 1
+@mechanicId = 1
+@maintenanceRecordId = 1
+
+### List offices
+GET {{baseUrl}}/offices/
+
+### Create office
+POST {{baseUrl}}/offices/
+Content-Type: application/json
+
+{
+  "name": "Salvador Office",
+  "city": "Salvador"
+}
+
+### Get office
+GET {{baseUrl}}/offices/{{officeId}}/
+
+### Update office
+PATCH {{baseUrl}}/offices/{{officeId}}/
+Content-Type: application/json
+
+{
+  "city": "Feira de Santana"
+}
+
+### Delete office
+DELETE {{baseUrl}}/offices/{{officeId}}/
+
+### Office summary
+GET {{baseUrl}}/offices/summary/
+
+### List vehicles
+GET {{baseUrl}}/vehicles/
+
+### Search vehicles
+GET {{baseUrl}}/vehicles/?office={{officeId}}&active=true&make=Toyota&model=Corolla&maintenance_date_after=2025-01-01&maintenance_date_before=2026-12-31&mechanic_certification_number=CERT-00001
+
+### Create vehicle
+POST {{baseUrl}}/vehicles/
+Content-Type: application/json
+
+{
+  "vin": "1HGCM82633A004352",
+  "license_plate": "ABC-1234",
+  "make": "Honda",
+  "model": "Accord",
+  "year": 2022,
+  "office": {{officeId}},
+  "active": true
+}
+
+### Vehicle details
+GET {{baseUrl}}/vehicles/{{vehicleId}}/
+
+### Update vehicle
+PATCH {{baseUrl}}/vehicles/{{vehicleId}}/
+Content-Type: application/json
+
+{
+  "active": false
+}
+
+### Delete vehicle
+DELETE {{baseUrl}}/vehicles/{{vehicleId}}/
+
+### Paginated vehicle maintenance history
+GET {{baseUrl}}/vehicles/{{vehicleId}}/maintenance-history/?page=1
+
+### Assign vehicle to another office
+POST {{baseUrl}}/vehicles/{{vehicleId}}/assign-office/
+Content-Type: application/json
+
+{
+  "office": {{newOfficeId}}
+}
+
+### Vehicles needing maintenance
+GET {{baseUrl}}/vehicles/needing-maintenance/?page=1
+
+### Check vehicle conflicts
+POST {{baseUrl}}/vehicles/duplicate-check/
+Content-Type: application/json
+
+{
+  "vin": "1HGCM82633A004352",
+  "license_plate": "ABC-1234"
+}
+
+### List mechanics
+GET {{baseUrl}}/mechanics/
+
+### Create mechanic
+POST {{baseUrl}}/mechanics/
+Content-Type: application/json
+
+{
+  "name": "Jane Smith",
+  "certification_number": "ASE-001",
+  "active": true
+}
+
+### Get mechanic
+GET {{baseUrl}}/mechanics/{{mechanicId}}/
+
+### Update mechanic
+PATCH {{baseUrl}}/mechanics/{{mechanicId}}/
+Content-Type: application/json
+
+{
+  "active": false
+}
+
+### Delete mechanic
+DELETE {{baseUrl}}/mechanics/{{mechanicId}}/
+
+### Mechanic workload
+GET {{baseUrl}}/mechanics/workload/
+
+### List maintenance records
+GET {{baseUrl}}/maintenance-records/
+
+### Create maintenance record
+POST {{baseUrl}}/maintenance-records/
+Content-Type: application/json
+
+{
+  "vehicle": {{vehicleId}},
+  "mechanic": {{mechanicId}},
+  "maintenance_date": "2026-09-28",
+  "maintenance_type": "Oil change",
+  "cost": "125.50",
+  "notes": "Synthetic oil"
+}
+
+### Get maintenance record
+GET {{baseUrl}}/maintenance-records/{{maintenanceRecordId}}/
+
+### Update maintenance record
+PATCH {{baseUrl}}/maintenance-records/{{maintenanceRecordId}}/
+Content-Type: application/json
+
+{
+  "cost": "150.00"
+}
+
+### Delete maintenance record
+DELETE {{baseUrl}}/maintenance-records/{{maintenanceRecordId}}/

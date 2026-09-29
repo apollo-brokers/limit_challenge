@@ -1,0 +1,7 @@
+.coverage
+.git
+.pytest_cache
+.venv
+__pycache__
+*.py[cod]
+db.sqlite3
