@@ -1,4 +1,5 @@
 from fleet.models import Vehicle
+from offices.models import Office
 
 
 class VehicleConflictError(Exception):
@@ -69,4 +70,9 @@ class VehicleService:
         if changes:
             vehicle.save(update_fields=list(changes))
 
+        return vehicle
+
+    def assign_office(self, vehicle: Vehicle, office: Office) -> Vehicle:
+        vehicle.office = office
+        vehicle.save(update_fields=["office"])
         return vehicle

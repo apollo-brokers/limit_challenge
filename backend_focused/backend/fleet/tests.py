@@ -448,3 +448,75 @@ def test_vehicle_maintenance_history_is_paginated_and_newest_first(
         maintenance_date.isoformat()
         for maintenance_date in reversed(maintenance_dates[:2])
     ]
+
+
+@pytest.mark.django_db
+def test_assigns_vehicle_to_another_office():
+    current_office = Office.objects.create(name="Downtown Office", city="New York")
+    new_office = Office.objects.create(name="Uptown Office", city="Boston")
+    vehicle = Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=current_office,
+    )
+
+    response = APIClient().post(
+        reverse("vehicle-assign-office", args=[vehicle.id]),
+        {"office": new_office.id},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["office"] == new_office.id
+
+    vehicle.refresh_from_db()
+    assert vehicle.office == new_office
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"office": 999999},
+    ],
+    ids=["missing-office", "unknown-office"],
+)
+@pytest.mark.django_db
+def test_rejects_invalid_vehicle_assignment(payload):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    vehicle = Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=office,
+    )
+
+    response = APIClient().post(
+        reverse("vehicle-assign-office", args=[vehicle.id]),
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "office" in response.data
+
+    vehicle.refresh_from_db()
+    assert vehicle.office == office
+
+
+@pytest.mark.django_db
+def test_assign_vehicle_returns_not_found_for_unknown_vehicle():
+    office = Office.objects.create(name="Downtown Office", city="New York")
+
+    response = APIClient().post(
+        reverse("vehicle-assign-office", args=[999999]),
+        {"office": office.id},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND

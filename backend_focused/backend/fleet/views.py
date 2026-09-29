@@ -5,7 +5,12 @@ from rest_framework.response import Response
 
 from fleet.filters import VehicleFilter
 from fleet.models import Vehicle
-from fleet.serializers import VehicleDetailSerializer, VehicleSerializer
+from fleet.serializers import (
+    VehicleAssignmentSerializer,
+    VehicleDetailSerializer,
+    VehicleSerializer,
+)
+from fleet.services import VehicleService
 from maintenance.models import MaintenanceRecord
 from maintenance.serializers import MaintenanceRecordSerializer
 
@@ -53,3 +58,22 @@ class VehicleViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(maintenance_records, many=True)
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="assign-office",
+        serializer_class=VehicleAssignmentSerializer,
+    )
+    def assign_office(self, request, pk=None):
+        vehicle = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        vehicle_service = VehicleService()
+        vehicle_service.assign_office(
+            vehicle=vehicle,
+            office=serializer.validated_data["office"],
+        )
+
+        return Response(VehicleSerializer(vehicle).data)
