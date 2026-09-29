@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from django.test import TestCase
@@ -307,9 +307,7 @@ def test_rejects_invalid_maintenance_date_filter(vehicle_search_data, parameter)
 
 
 @pytest.mark.django_db
-def test_vehicle_detail_includes_office_and_maintenance_history(
-    django_assert_num_queries,
-):
+def test_vehicle_detail_includes_office_and_maintenance_history():
     office = Office.objects.create(name="Downtown Office", city="New York")
     vehicle = Vehicle.objects.create(
         vin="1HGCM82633A004352",
@@ -334,8 +332,7 @@ def test_vehicle_detail_includes_office_and_maintenance_history(
             notes="Routine inspection",
         )
 
-    with django_assert_num_queries(2):
-        response = APIClient().get(reverse("vehicle-detail", args=[vehicle.id]))
+    response = APIClient().get(reverse("vehicle-detail", args=[vehicle.id]))
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data["office"] == {
@@ -353,3 +350,101 @@ def test_vehicle_detail_includes_office_and_maintenance_history(
             "certification_number": mechanic.certification_number,
             "active": mechanic.active,
         }
+
+
+@pytest.mark.parametrize(
+    "maintenance_count",
+    [1, 300],
+    ids=["single-record", "hundreds-of-records"],
+)
+@pytest.mark.django_db
+def test_vehicle_detail_query_count_is_constant(
+    django_assert_num_queries,
+    maintenance_count,
+):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    vehicle = Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=office,
+    )
+    mechanic = Mechanic.objects.create(
+        name="Jane Smith",
+        certification_number="ASE-001",
+    )
+    MaintenanceRecord.objects.bulk_create(
+        [
+            MaintenanceRecord(
+                vehicle=vehicle,
+                mechanic=mechanic,
+                maintenance_date=date(2026, 1, 1),
+                maintenance_type="Inspection",
+                cost="100.00",
+            )
+            for _ in range(maintenance_count)
+        ]
+    )
+
+    with django_assert_num_queries(2):
+        response = APIClient().get(reverse("vehicle-detail", args=[vehicle.id]))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data["maintenance_records"]) == maintenance_count
+
+
+@pytest.mark.django_db
+def test_vehicle_maintenance_history_is_paginated_and_newest_first(
+    django_assert_num_queries,
+):
+    office = Office.objects.create(name="Downtown Office", city="New York")
+    vehicle = Vehicle.objects.create(
+        vin="1HGCM82633A004352",
+        license_plate="ABC-1234",
+        make="Honda",
+        model="Accord",
+        year=2022,
+        office=office,
+    )
+    mechanic = Mechanic.objects.create(
+        name="Jane Smith",
+        certification_number="ASE-001",
+    )
+    maintenance_dates = [date(2026, 1, 1) + timedelta(days=day) for day in range(12)]
+
+    for maintenance_date in maintenance_dates:
+        MaintenanceRecord.objects.create(
+            vehicle=vehicle,
+            mechanic=mechanic,
+            maintenance_date=maintenance_date,
+            maintenance_type="Inspection",
+            cost="100.00",
+        )
+
+    url = reverse("vehicle-maintenance-history", args=[vehicle.id])
+
+    with django_assert_num_queries(3):
+        response = APIClient().get(url)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["count"] == 12
+    assert len(response.data["results"]) == 10
+    assert response.data["next"] is not None
+    assert [record["maintenance_date"] for record in response.data["results"]] == [
+        maintenance_date.isoformat()
+        for maintenance_date in reversed(maintenance_dates[2:])
+    ]
+    assert response.data["results"][0]["mechanic"] == mechanic.id
+
+    second_page_response = APIClient().get(url, {"page": 2})
+
+    assert second_page_response.status_code == status.HTTP_200_OK
+    assert second_page_response.data["next"] is None
+    assert [
+        record["maintenance_date"] for record in second_page_response.data["results"]
+    ] == [
+        maintenance_date.isoformat()
+        for maintenance_date in reversed(maintenance_dates[:2])
+    ]
