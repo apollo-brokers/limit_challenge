@@ -1,205 +1,102 @@
-# Fleet Maintenance API Take-home Challenge
+# Fleet Maintenance API
 
-Build a REST API for managing a fleet of vehicles and their maintenance history.
+REST API for managing offices, vehicles, mechanics, and vehicle maintenance history.
 
-Use Python, Django and Django REST Framework.
+The original take-home assignment is available in [CHALLENGE.md](./CHALLENGE.md).
 
-The API does not need authentication or a frontend.
+## Running the project
 
-## Domain
-
-A company owns vehicles that are assigned to offices around the country.
-Vehicles periodically receive maintenance services performed by mechanics.
-A vehicle may have many maintenance records.
-A mechanic may service many vehicles.
-Each office has many vehicles.
-
-Offices
-
-An office has:
-* name
-* city
-
-Vehicles
-
-A vehicle has:
-* VIN (Vehicle Identification Number)
-* license plate
-* make
-* model
-* year
-* office
-* active flag
-
-A VIN must uniquely identify a vehicle.
-A license plate cannot be shared by two active vehicles.
-
-Provide CRUD endpoints.
-
-A mechanic has:
-
-name
-certification number
-active flag
-
-Provide CRUD endpoints.
-
-Maintenance Records
-
-A maintenance record contains:
-
-vehicle
-mechanic
-maintenance date
-maintenance type
-cost
-notes
-
-Provide CRUD endpoints.
-
-## API endpoints
-
-1. CRUD endpoints for offices, vehicles, mechanics and maintenance records.
-
-2. Office summary
-
-It should return every office together with:
-* number of active vehicles
-* total maintenance cost during the last 12 months
-* date of the most recent maintenance performed on any vehicle in that office
-
-Example:
-[
-    {
-        "name": "New York",
-        "city": "New York",
-        "active_vehicle_count": 42,
-        "maintenance_cost_last_year": 81250.50,
-        "last_maintenance": "2025-02-18"
-    }
-]
-
-3. Vehicle search
-
-It should support optional filtering by any combination of:
-
-* office
-* active/inactive
-* make
-* model
-* maintenance performed between two dates
-* mechanic certification number
-
-4. Vehicle details
-
-Return vehicle details together with:
-* office information
-* complete maintenance history
-* mechanic information for each maintenance record
-
-The endpoint should perform well when a vehicle has hundreds of maintenance records.
-
-5. Vehicle maintenance history
-
-Provide an endpoint that returns the maintenance history for a single vehicle ordered from newest to oldest.
-
-6. Assign vehicle
-
-Provide an endpoint that moves a vehicle from one office to another.
-
-The endpoint should record only the new office assignment.
-
-7. Mechanic workload
-
-It should return:
-* mechanic name
-* number of maintenance records completed during the current year
-* total maintenance cost of work performed during the current year
-
-Order mechanics from busiest to least busy.
-
-8. Vehicles needing maintenance
-
-It should return all active vehicles that satisfy either of the following:
-* have never received maintenance
-* last maintenance was more than 365 days ago
-
-Order by oldest maintenance first.
-
-9. Duplicate vehicle check
-
-Given VIN and license plate, it should return whether another conflicting vehicle already exists and identifies the conflicting fields.
-
-Example:
-
-{
-    "conflicts": [
-        "vin",
-        "license_plate"
-    ]
-}
-
-## Front-end
-
-If you know React, implement a front-end that uses the CRUD endpoints, the vehicle search one 
-and another endpoint you choose.
-
-The Next.js 16 + React 19 app in `frontend/` is pre-wired for this challenge. Material UI handles
-layout, axios powers HTTP requests, and `@tanstack/react-query` is ready for data fetching. 
-
-## Error Handling
-
-Return appropriate HTTP status codes for invalid requests.
-Validation errors should include meaningful messages.
-
-## Project Structure
-
-- `backend/`: Empty Django project.
-- `frontend/`: Empty Next.js app.
-
-## Getting Started
-
-### Backend
+Docker and Docker Compose are required.
 
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
+make start
+make seed
 ```
 
-### Frontend
+The API will be available at `http://localhost:8000/api/`.
+
+- API documentation: `http://localhost:8000/docs/`
+- OpenAPI schema: `http://localhost:8000/api/schema/`
+- Health check: `http://localhost:8000/health/`
+
+To stop the project:
 
 ```bash
-cd frontend
-npm install
-# NEXT_PUBLIC_API_BASE_URL defaults to http://localhost:8000/api
-npm run dev
+make down
 ```
 
-Visit `http://localhost:3000` in your web browser to run it.
+## Tests
 
-## Deliverables
+```bash
+make test
+```
 
-source code
-database migrations
-a Django management command that fills the database with dummy data to make manually testing your app easier (suggestion: use the faker Python library)
-README describing:
-  how to run the project
-  how to run tests
-  assumptions made
-  chosen tradeoffs  
-if front-end was implemented, record and share a brief video (max 2 minutes) demonstrating the frontend working end-to-end with the backend.
+Run formatting, tests, Django checks, and migration checks together:
 
-## Evaluation Criteria
+```bash
+make check
+```
 
-- **Backend (50%)** – API design, database queries performance, appropriate use of Django and Django Rest Framework
-- **Frontend (25%)** – UX clarity, filter UX tied to query params, state/data management, handling
-  of loading/empty/error cases, and overall polish.
-- **Code Quality (15%)** – Code structure, testing where it adds value, documentation/readability, naming
-- **Product Thinking (10%)** – Workflow clarity, assumptions noted, and thoughtful UX details (if front-end is implemented)
+## Seed data
 
-## Optional Bonus
+Create a small dataset:
 
-Authentication using JWT is not required but welcome if time allows.
+```bash
+make seed
+```
+
+Create a larger dataset for performance testing:
+
+```bash
+make seed-large
+```
+
+Replace existing data with a new dataset:
+
+```bash
+make seed-clear
+```
+
+## Main endpoints
+
+| Resource | Endpoint |
+| --- | --- |
+| Offices CRUD | `/api/offices/` |
+| Office summary | `/api/offices/summary/` |
+| Vehicles CRUD and search | `/api/vehicles/` |
+| Vehicle details | `/api/vehicles/{id}/` |
+| Maintenance history | `/api/vehicles/{id}/maintenance-history/` |
+| Assign office | `/api/vehicles/{id}/assign-office/` |
+| Vehicles needing maintenance | `/api/vehicles/needing-maintenance/` |
+| Duplicate vehicle check | `/api/vehicles/duplicate-check/` |
+| Mechanics CRUD | `/api/mechanics/` |
+| Mechanic workload | `/api/mechanics/workload/` |
+| Maintenance records CRUD | `/api/maintenance-records/` |
+
+Vehicle search supports `office`, `active`, `make`, `model`, maintenance date range, and mechanic certification number filters. Request examples are available in [`api.http`](./api.http).
+
+## Performance testing
+
+Run the default Locust test:
+
+```bash
+make load-test
+```
+
+Open the Locust web interface:
+
+```bash
+make load-test-ui
+```
+
+## Assumptions
+
+- Pagination was not explicitly required, so list endpoints and the maintenance history endpoint use page-number pagination with 10 records per page. Vehicle details still return the complete maintenance history as requested.
+- No license plate format was specified, so the API accepts any non-empty value up to 20 characters instead of enforcing a country-specific pattern. Plate conflicts are checked without distinguishing uppercase and lowercase letters.
+- The project structure was not specified, so the domain was divided into three Django apps: `offices`, `fleet`, and `maintenance`.
+
+## Trade-offs
+
+- SQLite keeps the project easy to run without an additional database service, but a production environment would benefit from a database such as PostgreSQL.
+- Vehicle details include the complete maintenance history as requested, which can produce a large response. Related data is prefetched to keep the number of database queries constant, and a separate paginated history endpoint is also available.
+- Vehicle conflicts are checked in the service to provide clear API messages and enforced again with database constraints for data integrity. This intentionally duplicates part of the rule across two layers.
