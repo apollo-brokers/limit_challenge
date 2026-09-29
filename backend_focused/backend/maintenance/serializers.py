@@ -21,3 +21,12 @@ class MaintenanceRecordDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceRecord
         fields = "__all__"
+
+
+class MechanicWorkloadSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    maintenance_count = serializers.IntegerField()
+    total_maintenance_cost = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+    )
