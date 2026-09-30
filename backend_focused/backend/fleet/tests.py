@@ -285,6 +285,8 @@ def vehicle_search_data(db):
         "client": APIClient(),
         "primary_office": primary_office,
         "secondary_office": secondary_office,
+        "mechanic": mechanic,
+        "other_mechanic": other_mechanic,
         "honda": honda,
         "toyota": toyota,
         "ford": ford,

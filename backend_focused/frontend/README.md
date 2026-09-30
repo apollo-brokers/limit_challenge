@@ -1,15 +1,17 @@
 # Fleet Tracker frontend
 
-The UI for the backend-focused challenge, built with Next.js, TypeScript, Material UI, React Hook Form, Axios, and TanStack Query. It connects to the real Django API.
+The UI for the backend-focused challenge, built with Next.js, TypeScript, Material UI, React Hook Form, Zod, Axios, and TanStack Query. It connects to the real Django API.
 
 ## Run locally
 
-Start the backend from `backend_focused/` (Docker is required):
+Start the backend from `backend_focused/` with Python 3.10 or newer:
 
 ```bash
-make start
 make seed
+make start
 ```
+
+To use Docker instead, run `make docker-start` followed by `make docker-seed`. See the root [README](../README.md) for installation and development commands.
 
 Then, from `backend_focused/frontend/`:
 
@@ -50,10 +52,11 @@ components/reports/         Shared List/Chart controls and lazy-loaded MUI X bar
 components/                Navigation, feedback, pagination, and common UI states
 hooks/api/                 TanStack Query queries, mutations, and invalidation
 lib/api/                   Typed Axios functions and generated API types
+lib/validation/            Shared Zod schemas for forms and cross-field rules
 theme.ts                   Shared Material UI theme
 ```
 
-Pages cover vehicles, offices, mechanics, and maintenance records. List filters and pagination live in the URL. Forms use `FormProvider` and reusable RHF fields; server validation appears on the corresponding field or in the form's error message. Successful mutations refresh affected queries.
+Pages cover vehicles, offices, mechanics, and maintenance records. List filters and pagination live in the URL. Forms use `FormProvider`, reusable RHF fields, and Zod schemas through `@hookform/resolvers`; server validation still appears on the corresponding field or in the form's error message. Successful mutations refresh affected queries.
 
 Each list has a visible search form. Filtering runs on the API before pagination, so it includes records outside the current page:
 
@@ -68,7 +71,7 @@ Date ranges are inclusive and can have just a start or end date. Apply resets pa
 
 The main navigation groups four sections: Vehicles, Offices, Mechanics, and Maintenance. On desktop these are top-level tabs; on mobile a labeled Section selector keeps them accessible without crowding the header. Local tabs below each section title link to All vehicles / Needing maintenance, All offices / Fleet summary, and All mechanics / Workload. The active section and view derive from the URL, so direct links, reloads, and browser history stay consistent. Vehicle details remain under All vehicles; Maintenance does not need a second navigation row.
 
-The interface also uses vehicle details, maintenance history, and vehicles needing maintenance. Fleet summary (`/offices/summary`) and Mechanic workload (`/mechanics/workload`) retain their dedicated routes within Offices and Mechanics, instead of being embedded below the CRUD tables. Each report offers List and Chart views of the same complete API response, with separate count and cost metrics. Office costs cover the last 365 days; mechanic workload covers the current calendar year. Layouts use Material UI Grid, Stack, tables, and dialogs.
+The interface also uses vehicle details, maintenance history, and vehicles needing maintenance. Fleet summary (`/offices/summary`) and Mechanic workload (`/mechanics/workload`) retain their dedicated routes within Offices and Mechanics, instead of being embedded below the CRUD tables. Each report offers List and Chart views of the same complete API response, with separate count and cost metrics. Office costs cover the last 12 calendar months; mechanic workload covers the current calendar year. Layouts use Material UI Grid, Stack, tables, and dialogs.
 
 Vehicle details display the complete maintenance history from the single `/api/vehicles/:id/` response. Every returned record is rendered, newest first (descending ID breaks same-date ties), with its mechanic information, cost, and notes. There is no client-side pagination, load-more control, or separate history request on this screen. The standalone Maintenance CRUD list keeps its API pagination and is available through Manage maintenance.
 
@@ -89,7 +92,7 @@ Browser tests require a running backend and a Playwright browser. Install Chromi
 ## Decisions
 
 - Office, mechanic, and vehicle fields use server-side autocomplete: opening loads the first page, typing two or more characters searches after a 350 ms debounce, and scrolling (or keyboard navigation) loads more options. Existing selections resolve by ID when editing or restoring URL filters. Forms store only the selected ID. Table label lookups still fetch all catalog pages for this small challenge.
-- Costs display two decimal places without a currency symbol because the API does not specify a currency.
+- Because the challenge does not specify a currency, the UI assumes all costs are US dollars (USD), shows `$` in cost inputs, and formats saved values and report totals as USD.
 - Report charts use the MIT-licensed Community package `@mui/x-charts`, loaded only when the Chart view is opened. Horizontal bars include every returned record, keep duplicate names separate, use a zero baseline (including signed cost totals), and preserve full labels/exact values in tooltips and keyboard navigation. List view retains all fields, including latest service dates. No chart-specific backend or paid MUI feature is required.
 - Authentication is not implemented. The frontend uses the challenge API as provided.
 - Components and hooks stay close to their pages; only genuinely shared behavior moves into common folders.

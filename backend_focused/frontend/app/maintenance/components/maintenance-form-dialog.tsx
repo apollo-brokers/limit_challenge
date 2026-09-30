@@ -1,6 +1,15 @@
 'use client';
 
-import { Alert, Button, Dialog, DialogActions, DialogContent, Grid, Stack } from '@mui/material';
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  Grid,
+  InputAdornment,
+  Stack,
+} from '@mui/material';
 import { FormProvider } from 'react-hook-form';
 import { RHFAsyncAutocomplete } from '@/components/forms/rhf-async-autocomplete';
 import { RHFTextField } from '@/components/forms/rhf-text-field';
@@ -63,12 +72,11 @@ export function MaintenanceFormDialog({
                     label="Cost"
                     required
                     helperText="Up to two decimal places."
-                    slotProps={{ htmlInput: { inputMode: 'decimal' } }}
-                    rules={{
-                      pattern: {
-                        value: /^-?\d{1,10}(\.\d{1,2})?$/,
-                        message: 'Enter a valid cost with up to 10 whole digits and 2 decimals.',
+                    slotProps={{
+                      input: {
+                        startAdornment: <InputAdornment position="start">$</InputAdornment>,
                       },
+                      htmlInput: { inputMode: 'decimal' },
                     }}
                   />
                 </Grid>
@@ -77,11 +85,6 @@ export function MaintenanceFormDialog({
                     name="maintenance_type"
                     label="Maintenance type"
                     required
-                    rules={{
-                      maxLength: { value: 100, message: 'Use 100 characters or fewer.' },
-                      validate: (value) =>
-                        !!String(value ?? '').trim() || 'Enter the maintenance type.',
-                    }}
                   />
                 </Grid>
                 <Grid size={12}>

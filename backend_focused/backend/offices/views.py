@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
@@ -28,7 +26,12 @@ class OfficeViewSet(viewsets.ModelViewSet):
         filter_backends=[],
     )
     def summary(self, request):
-        maintenance_cutoff = timezone.localdate() - timedelta(days=365)
+        today = timezone.localdate()
+        try:
+            maintenance_cutoff = today.replace(year=today.year - 1)
+        except ValueError:
+            maintenance_cutoff = today.replace(year=today.year - 1, day=28)
+
         offices: OfficeQuerySet = Office.objects.all()
         offices = offices.with_summary(maintenance_since=maintenance_cutoff)
 
