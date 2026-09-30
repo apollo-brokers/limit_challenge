@@ -43,9 +43,6 @@ Seed data (~25 submissions with dozens of related contacts, documents, and notes
 - `GET /api/brokers/`
   - Returns brokers for the frontend dropdown.
 
-Viewsets, serializers, and base filters are in place but intentionally minimal so you can refine
-the query behavior and filtering logic.
-
 ## Frontend Workspace Overview
 
 The Next.js 16 + React 19 app in `frontend/` is pre-wired for this challenge. Material UI handles
