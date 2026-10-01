@@ -1,0 +1,7 @@
+-r requirements.txt
+
+black==26.5.1
+Faker==33.3.0
+locust==2.46.6
+pytest==9.1.1
+pytest-django==4.14.0

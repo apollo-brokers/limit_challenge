@@ -1,205 +1,191 @@
-# Fleet Maintenance API Take-home Challenge
+# Fleet Maintenance API
 
-Build a REST API for managing a fleet of vehicles and their maintenance history.
+REST API for managing offices, vehicles, mechanics, and vehicle maintenance history.
 
-Use Python, Django and Django REST Framework.
+The original take-home assignment is available in [CHALLENGE.md](./CHALLENGE.md).
 
-The API does not need authentication or a frontend.
+## Running the project
 
-## Domain
+Python 3.10 or newer is required for the default local workflow. The Makefile selects an available compatible Python and creates `backend/.venv` automatically.
 
-A company owns vehicles that are assigned to offices around the country.
-Vehicles periodically receive maintenance services performed by mechanics.
-A vehicle may have many maintenance records.
-A mechanic may service many vehicles.
-Each office has many vehicles.
-
-Offices
-
-An office has:
-* name
-* city
-
-Vehicles
-
-A vehicle has:
-* VIN (Vehicle Identification Number)
-* license plate
-* make
-* model
-* year
-* office
-* active flag
-
-A VIN must uniquely identify a vehicle.
-A license plate cannot be shared by two active vehicles.
-
-Provide CRUD endpoints.
-
-A mechanic has:
-
-name
-certification number
-active flag
-
-Provide CRUD endpoints.
-
-Maintenance Records
-
-A maintenance record contains:
-
-vehicle
-mechanic
-maintenance date
-maintenance type
-cost
-notes
-
-Provide CRUD endpoints.
-
-## API endpoints
-
-1. CRUD endpoints for offices, vehicles, mechanics and maintenance records.
-
-2. Office summary
-
-It should return every office together with:
-* number of active vehicles
-* total maintenance cost during the last 12 months
-* date of the most recent maintenance performed on any vehicle in that office
-
-Example:
-[
-    {
-        "name": "New York",
-        "city": "New York",
-        "active_vehicle_count": 42,
-        "maintenance_cost_last_year": 81250.50,
-        "last_maintenance": "2025-02-18"
-    }
-]
-
-3. Vehicle search
-
-It should support optional filtering by any combination of:
-
-* office
-* active/inactive
-* make
-* model
-* maintenance performed between two dates
-* mechanic certification number
-
-4. Vehicle details
-
-Return vehicle details together with:
-* office information
-* complete maintenance history
-* mechanic information for each maintenance record
-
-The endpoint should perform well when a vehicle has hundreds of maintenance records.
-
-5. Vehicle maintenance history
-
-Provide an endpoint that returns the maintenance history for a single vehicle ordered from newest to oldest.
-
-6. Assign vehicle
-
-Provide an endpoint that moves a vehicle from one office to another.
-
-The endpoint should record only the new office assignment.
-
-7. Mechanic workload
-
-It should return:
-* mechanic name
-* number of maintenance records completed during the current year
-* total maintenance cost of work performed during the current year
-
-Order mechanics from busiest to least busy.
-
-8. Vehicles needing maintenance
-
-It should return all active vehicles that satisfy either of the following:
-* have never received maintenance
-* last maintenance was more than 365 days ago
-
-Order by oldest maintenance first.
-
-9. Duplicate vehicle check
-
-Given VIN and license plate, it should return whether another conflicting vehicle already exists and identifies the conflicting fields.
-
-Example:
-
-{
-    "conflicts": [
-        "vin",
-        "license_plate"
-    ]
-}
-
-## Front-end
-
-If you know React, implement a front-end that uses the CRUD endpoints, the vehicle search one 
-and another endpoint you choose.
-
-The Next.js 16 + React 19 app in `frontend/` is pre-wired for this challenge. Material UI handles
-layout, axios powers HTTP requests, and `@tanstack/react-query` is ready for data fetching. 
-
-## Error Handling
-
-Return appropriate HTTP status codes for invalid requests.
-Validation errors should include meaningful messages.
-
-## Project Structure
-
-- `backend/`: Empty Django project.
-- `frontend/`: Empty Next.js app.
-
-## Getting Started
-
-### Backend
+### Local virtual environment (default)
 
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
+make seed
+make start
 ```
 
-### Frontend
+`make start` installs runtime dependencies when needed, applies migrations, and runs the API in the foreground. Use `make dev` instead to install the development requirements before starting. Press `Ctrl+C` to stop either local server.
+
+The installation commands are also available separately:
+
+```bash
+make install       # runtime dependencies
+make install-dev   # runtime, formatting, tests, seed helpers, and load testing
+```
+
+### Docker Compose
+
+Docker remains available as an alternative workflow:
+
+```bash
+make docker-start
+make docker-seed
+```
+
+Stop its containers with `make docker-down`. Run `make help` to see the local commands and their `docker-*` equivalents.
+
+The API will be available at `http://localhost:8000/api/`.
+
+- API documentation: `http://localhost:8000/docs/`
+- OpenAPI schema: `http://localhost:8000/api/schema/`
+- Health check: `http://localhost:8000/health/`
+
+## Frontend
+
+With the API running, start the Next.js interface in another terminal:
 
 ```bash
 cd frontend
 npm install
-# NEXT_PUBLIC_API_BASE_URL defaults to http://localhost:8000/api
 npm run dev
 ```
 
-Visit `http://localhost:3000` in your web browser to run it.
+Open [Fleet Tracker at localhost:3000](http://localhost:3000). The frontend uses the local API at `http://localhost:8000/api` by default. See [frontend/README.md](./frontend/README.md) for API type generation, configuration, architecture, and checks.
 
-## Deliverables
+## Demo
 
-source code
-database migrations
-a Django management command that fills the database with dummy data to make manually testing your app easier (suggestion: use the faker Python library)
-README describing:
-  how to run the project
-  how to run tests
-  assumptions made
-  chosen tradeoffs  
-if front-end was implemented, record and share a brief video (max 2 minutes) demonstrating the frontend working end-to-end with the backend.
+Watch the [narrated and captioned end-to-end frontend demonstration](./docs/fleet-tracker-demo.mp4) (1 minute 59 seconds).
 
-## Evaluation Criteria
+## Tests
 
-- **Backend (50%)** – API design, database queries performance, appropriate use of Django and Django Rest Framework
-- **Frontend (25%)** – UX clarity, filter UX tied to query params, state/data management, handling
-  of loading/empty/error cases, and overall polish.
-- **Code Quality (15%)** – Code structure, testing where it adds value, documentation/readability, naming
-- **Product Thinking (10%)** – Workflow clarity, assumptions noted, and thoughtful UX details (if front-end is implemented)
+```bash
+make test
+# or: make docker-test
+```
 
-## Optional Bonus
+Run formatting, tests, Django checks, and migration checks together:
 
-Authentication using JWT is not required but welcome if time allows.
+```bash
+make check
+# or: make docker-check
+```
+
+Frontend end-to-end tests use Playwright against the real API:
+
+```bash
+cd frontend
+npm run test:e2e
+```
+
+This provides strong workflow coverage, but runs slower and requires more setup than isolated unit tests.
+
+## Seed data
+
+Create a small dataset:
+
+```bash
+make seed
+```
+
+Create a larger dataset for performance testing:
+
+```bash
+make seed-large
+```
+
+Add four clearly named vehicles with large maintenance histories, preserving existing data:
+
+```bash
+make seed-performance
+```
+
+This adds `Veiculo 1 mil registros`, `Veiculo 10 mil registros`, `Veiculo 50 mil registros`, and `Veiculo 100 mil registros`: 161,000 maintenance records in total. Vehicles are listed newest first; the command creates them in reverse size order so these four initially appear at the top, from smallest to largest. Search for `Veiculo` or the specific model to find them again after other vehicles are added.
+
+The command is repeatable: it reuses its reserved VINs and only fills missing records, without resetting the database or deleting extra records added later. Inserts are batched inside a transaction. SQL logging and Django debug query collection are disabled for this seed process, not the running API. The Docker equivalent is:
+
+```bash
+make docker-seed-performance
+```
+
+Vehicle details return the entire history in one response. Rendering 50,000–100,000 table rows can be expensive in the browser; these deliberately large datasets stress both API response size and frontend rendering, beyond the challenge's hundreds-of-records scenario.
+
+Replace existing data with a new dataset:
+
+```bash
+make seed-clear
+```
+
+All seed commands use the local virtual environment by default. Prefix them with `docker-`, such as `make docker-seed-large`, to run them through Compose.
+
+## Main endpoints
+
+| Resource                     | Endpoint                                  |
+| ---------------------------- | ----------------------------------------- |
+| Offices CRUD                 | `/api/offices/`                           |
+| Office summary               | `/api/offices/summary/`                   |
+| Vehicles CRUD and search     | `/api/vehicles/`                          |
+| Vehicle details              | `/api/vehicles/{id}/`                     |
+| Maintenance history          | `/api/vehicles/{id}/maintenance-history/` |
+| Assign office                | `/api/vehicles/{id}/assign-office/`       |
+| Vehicles needing maintenance | `/api/vehicles/needing-maintenance/`      |
+| Duplicate vehicle check      | `/api/vehicles/duplicate-check/`          |
+| Mechanics CRUD               | `/api/mechanics/`                         |
+| Mechanic workload            | `/api/mechanics/workload/`                |
+| Maintenance records CRUD     | `/api/maintenance-records/`               |
+
+Vehicle search supports free text (`search`: VIN, plate, make or model), `office`, `active`, `make`, `model`, maintenance date range, and mechanic certification number filters. Request examples are available in [`api.http`](./api.http).
+
+Additional list filters support the frontend search forms:
+
+- Offices: `search` by name or city.
+- Mechanics: `search` by name or certification number, plus `active`.
+- Maintenance records: `search` by service, notes, vehicle or mechanic; `vehicle`, `mechanic`, `maintenance_date_after`, and `maintenance_date_before`.
+
+Filters combine and run before pagination. Date limits are inclusive. Summary and workload endpoints remain unfiltered.
+
+## Performance testing
+
+Locust was not required by the challenge. It was added to make load and stress testing repeatable, especially for endpoints that handle large maintenance histories.
+
+Run the default Locust test:
+
+```bash
+make load-test
+# or: make docker-load-test
+```
+
+The local command expects `make start` or `make dev` to be running in another terminal. The Docker command starts the containerized API automatically.
+
+Open the Locust web interface:
+
+```bash
+make load-test-ui
+# or: make docker-load-test-ui
+```
+
+## Assumptions
+
+- Lists and maintenance history use 10-item pages. Vehicle details return the complete history, as required.
+- VINs allow up to 17 characters and plates up to 20. VINs, active plates, and certification numbers are unique case-insensitively.
+- Maintenance represents completed work: dates cannot be in the future, costs cannot be negative, and service type remains free text.
+- Office costs use the previous 12 calendar months; workload uses the current year. February 29 maps to February 28, and overdue means strictly more than 365 days.
+- Only the current office is stored, so historical costs follow the vehicle when reassigned. Costs use USD, related records are protected from deletion, and authentication remains out of scope.
+
+## Trade-offs
+
+### Backend
+
+- Local and Docker workflows are both supported. SQLite keeps evaluation simple but is not intended as a production database.
+- Office summaries and workloads are calculated live. Results stay current, but aggregation cost grows with the dataset.
+- Vehicle details prefetch the complete history in a fixed query count. Payload and rendering cost still grow with history size, so a paginated history endpoint is also available.
+- Services provide clear validation errors; database constraints protect key invariants. Future-date validation stays in the application because its boundary changes daily.
+- A production project would add a `docs/` development harness: project-specific skills, repeatable workflows, debugging runbooks, architecture decisions, and operational guides. It is omitted here to keep the challenge focused.
+
+### Frontend
+
+- TanStack Query owns server state. Mutations refetch related data instead of applying optimistic updates.
+- React Hook Form and shared Zod schemas keep form logic consistent; the backend remains the final authority.
+- Filters and pagination live in the URL and update on **Apply**, preserving links and browser history without requesting on every keystroke.
+- OpenAPI-generated types are committed so builds do not require a running backend; API changes require `npm run generate:api`.
+- Relationship fields use debounced, paginated autocomplete to avoid loading entire catalogs, at the cost of delayed results and additional request state.

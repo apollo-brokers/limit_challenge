@@ -1,21 +1,11 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v16-appRouter';
 import Providers from './providers';
-import './globals.css';
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
+import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
-  title: 'Fleet Tracker Challenge',
-  description: 'Frontend scaffold for the take-home assignment',
+  title: { default: 'Fleet Tracker', template: '%s | Fleet Tracker' },
+  description: 'Manage your fleet, offices, mechanics, and maintenance history.',
 };
 
 export default function RootLayout({
@@ -24,9 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+    <html lang="en">
+      <body>
+        <AppRouterCacheProvider>
+          <Providers>
+            <AppShell>{children}</AppShell>
+          </Providers>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );
