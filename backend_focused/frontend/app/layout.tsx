@@ -1,21 +1,24 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { DM_Sans, IBM_Plex_Mono } from 'next/font/google';
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v16-appRouter';
 import Providers from './providers';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const dmSans = DM_Sans({
+  variable: '--font-body',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: '--font-mono',
   subsets: ['latin'],
+  weight: ['400', '500'],
 });
 
 export const metadata: Metadata = {
-  title: 'Fleet Tracker Challenge',
-  description: 'Frontend scaffold for the take-home assignment',
+  title: 'Fleetline — Fleet operations',
+  description: 'Search vehicles, manage records, and monitor maintenance due.',
 };
 
 export default function RootLayout({
@@ -24,9 +27,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${dmSans.variable} ${ibmPlexMono.variable} h-full`}>
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <AppRouterCacheProvider options={{ enableCssLayer: true }}>
+          <Providers>{children}</Providers>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );
