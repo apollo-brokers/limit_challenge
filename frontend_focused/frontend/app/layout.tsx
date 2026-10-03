@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Submission Tracker Challenge',
-  description: 'Frontend scaffold for the take-home assignment',
+  title: 'Submission Tracker',
+  description: 'Review broker submissions, filters, and opportunity details',
 };
 
 export default function RootLayout({

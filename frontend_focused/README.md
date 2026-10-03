@@ -1,3 +1,31 @@
+
+## Candidate Implementation Notes
+
+**Approach / how to run:** From this `frontend_focused` directory, follow the **Getting Started** section below (`backend/` then `frontend/`). Visit `http://localhost:3000/submissions` while the API runs on port 8000.
+
+**Implementation**
+
+- Backend (Django REST Framework): paginated submission list, submission detail, and unpaginated brokers endpoint.
+- Required list filters: `status`, `brokerId`, `companySearch`. Additional filter: `priority`. Stretch date filters: `createdFrom`, `createdTo`.
+- Query layer: `select_related` on list/detail, `prefetch_related` on detail, annotated document/note counts, and subqueries for the latest note preview.
+- Frontend (Next.js 16, React 19, TypeScript, MUI, TanStack React Query): filters and page sync to URL query parameters; debounced company search.
+- UI: submission table, detail sections for contacts/documents/notes, loading/empty/error states, pagination with invalid-page recovery, and back navigation that preserves list filters.
+
+**Tests**
+
+- Run from `backend/`: `python manage.py test submissions` (8 targeted API tests).
+
+**Tradeoffs**
+
+- Did not implement optional `hasDocuments` / `hasNotes` filters.
+- Did not add authentication, deployment, or extra infrastructure (optional scope).
+- Favored a small, readable codebase over extra abstraction layers.
+
+**Stretch goals implemented**
+
+- `priority`, `createdFrom`, and `createdTo` filtering
+- Targeted backend tests in `submissions/tests.py`
+
 # Submission Tracker Take-home Challenge
 
 This repository hosts the boilerplate for the Submission Tracker assignment. It includes a Django +
@@ -112,7 +140,7 @@ Visit `http://localhost:3000/submissions` to start building.
 ## Submission Instructions
 
 - Provide a short README update summarizing approach, tradeoffs, and how to run the solution.
-- Record and share a brief screen capture (max 2 minutes) demonstrating the frontend working end-to-end with the backend.
+- Demo video (max 2 minutes) — [`Submission_Tracker_Demo.mp4`](./Submission_Tracker_Demo.mp4)
 - Call out any stretch goals implemented.
 - Automated tests are optional, but including targeted backend or frontend tests is a strong signal.
 
