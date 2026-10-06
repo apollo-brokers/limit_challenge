@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -28,6 +29,13 @@ class Company(models.Model):
 class TeamMember(models.Model):
     full_name = models.CharField(max_length=255)
     email = models.EmailField(unique=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="team_member",
+    )
 
     class Meta:
         ordering = ["full_name"]
@@ -48,34 +56,29 @@ class Submission(models.Model):
         MEDIUM = "medium", "Medium"
         LOW = "low", "Low"
 
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="submissions"
-    )
-    broker = models.ForeignKey(
-        Broker, on_delete=models.PROTECT, related_name="submissions"
-    )
-    owner = models.ForeignKey(
-        TeamMember, on_delete=models.PROTECT, related_name="submissions"
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="submissions")
+    broker = models.ForeignKey(Broker, on_delete=models.PROTECT, related_name="submissions")
+    owner = models.ForeignKey(TeamMember, on_delete=models.PROTECT, related_name="submissions")
     status = models.CharField(max_length=32, choices=Status.choices, default=Status.NEW)
-    priority = models.CharField(
-        max_length=32, choices=Priority.choices, default=Priority.MEDIUM
-    )
+    priority = models.CharField(max_length=32, choices=Priority.choices, default=Priority.MEDIUM)
     summary = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"], name="submission_status_idx"),
+            models.Index(fields=["priority"], name="submission_priority_idx"),
+            models.Index(fields=["-created_at"], name="submission_created_at_idx"),
+        ]
 
     def __str__(self) -> str:  # pragma: no cover - simple repr
         return f"{self.company} ({self.status})"
 
 
 class Contact(models.Model):
-    submission = models.ForeignKey(
-        Submission, on_delete=models.CASCADE, related_name="contacts"
-    )
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="contacts")
     name = models.CharField(max_length=255)
     role = models.CharField(max_length=255, blank=True)
     email = models.EmailField(blank=True)
@@ -89,12 +92,10 @@ class Contact(models.Model):
 
 
 class Document(models.Model):
-    submission = models.ForeignKey(
-        Submission, on_delete=models.CASCADE, related_name="documents"
-    )
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="documents")
     title = models.CharField(max_length=255)
     doc_type = models.CharField(max_length=255)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_at = models.DateTimeField(default=timezone.now)
     file_url = models.URLField(blank=True)
 
     class Meta:
@@ -105,15 +106,18 @@ class Document(models.Model):
 
 
 class Note(models.Model):
-    submission = models.ForeignKey(
-        Submission, on_delete=models.CASCADE, related_name="notes"
-    )
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="notes")
     author_name = models.CharField(max_length=255)
     body = models.TextField()
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["submission", "-created_at"], name="note_submission_created_at_idx"
+            ),
+        ]
 
     def __str__(self) -> str:  # pragma: no cover - simple repr
         return f"{self.author_name} - {self.created_at:%Y-%m-%d}"

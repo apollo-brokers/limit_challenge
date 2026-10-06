@@ -80,8 +80,25 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
-export interface SubmissionListFilters {
+export interface CurrentUser {
+  id: number;
+  username: string;
+  fullName: string;
+  teamMember: TeamMember | null;
+}
+
+export interface LoginCredentials {
+  username: string;
+  password: string;
+}
+
+export interface StatusCount {
+  status: SubmissionStatus;
+  count: number;
+}
+
+export interface SubmissionTriageUpdate {
   status?: SubmissionStatus;
-  brokerId?: string;
-  companySearch?: string;
+  priority?: SubmissionPriority;
+  owner?: TeamMember;
 }
